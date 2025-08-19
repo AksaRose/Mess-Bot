@@ -13,6 +13,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.request import HTTPXRequest # Import HTTPXRequest
 
 load_dotenv() # Load environment variables from .env file
 
@@ -152,22 +153,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     )
     return ConversationHandler.END
 
-def main() -> None:
-    """Start the bot."""
-    application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).build()
-
-    # Add conversation handler with states
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_admission_no)],
-            ADMISSION_NO: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_passout_year)],
-            PASSOUT_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_profile_photo)],
-            PROFILE_PHOTO: [MessageHandler(filters.PHOTO, save_student_data)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-
 async def meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Starts the meal choice conversation by displaying tomorrow's menu."""
     user_id = update.effective_user.id
@@ -286,7 +271,10 @@ async def save_meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 def main() -> None:
     """Start the bot."""
-    application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).build()
+    # Configure httpx client with a longer timeout for all HTTP requests made by the bot
+    # Configure httpx client with a longer timeout for all HTTP requests made by the bot
+    request = HTTPXRequest(connect_timeout=30.0, read_timeout=30.0)
+    application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).request(request).build()
 
     # Add conversation handler for student registration
     registration_conv_handler = ConversationHandler(
@@ -363,11 +351,68 @@ def main() -> None:
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
+import io
+import asyncio
+from functools import partial
+from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+def _generate_ticket_image(student_name, ticket_date, veg_or_nonveg, caffeine_choice, profile_photo_bytes=None):
+    """Helper function to generate the ticket image (CPU-bound)."""
+    img_width = 600
+    img_height = 400
+    background_color = (215, 240, 57) # #D7F039
+    text_color = (0, 0, 0) # Black
+
+    img = Image.new('RGB', (img_width, img_height), color = background_color)
+    d = ImageDraw.Draw(img)
+
+    # Use default font for simplicity and cross-platform compatibility
+    font_name_date = ImageFont.load_default(size=40)
+    font_meal = ImageFont.load_default(size=60)
+    font_caffeine = ImageFont.load_default(size=30)
+    
+    # Text positions for left half (0-300px width)
+    x_text_offset = 20
+
+    d.text((x_text_offset, 20), f"{student_name}", fill=text_color, font=font_name_date)
+    d.text((x_text_offset, 80), f"{ticket_date}", fill=text_color, font=font_name_date)
+    d.text((x_text_offset, 180), f"{veg_or_nonveg}", fill=text_color, font=font_meal)
+    d.text((x_text_offset, 280), f"Caffeine: {caffeine_choice}", fill=text_color, font=font_caffeine)
+
+    # Profile photo for the right half (300-600px width)
+    if profile_photo_bytes:
+        try:
+            profile_img = Image.open(io.BytesIO(profile_photo_bytes))
+            
+            # Resize photo to fill the right half (300x400) while maintaining aspect ratio
+            # and then center it in that half
+            photo_target_width = 300
+            photo_target_height = 400
+            profile_img.thumbnail((photo_target_width, photo_target_height), Image.LANCZOS)
+            
+            # Calculate position to center in the right half
+            x_photo = img_width - photo_target_width + (photo_target_width - profile_img.width) // 2
+            y_photo = (img_height - profile_img.height) // 2
+            
+            img.paste(profile_img, (x_photo, y_photo))
+        except Exception as e:
+            logger.error(f"Error processing profile photo in helper: {e}")
+            d.text((img_width - 280, 20), "Photo Error", fill=(255,0,0), font=font_caffeine)
+    else:
+        d.text((img_width - 280, 20), "No profile photo", fill=text_color, font=font_caffeine)
+
+    byte_io = io.BytesIO()
+    img.save(byte_io, format='PNG')
+    byte_io.seek(0)
+    return byte_io
+
 async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Generates and sends a food ticket for today based on yesterday's choice."""
+    """Generates and sends a food ticket for today based on yesterday's choice as an image."""
     user_id = update.effective_user.id
     conn = get_db_connection()
     cur = conn.cursor()
+
+    profile_photo_bytes = None
 
     try:
         cur.execute("SELECT id, name, profile_file_id FROM students WHERE tg_user_id = %s", (user_id,))
@@ -410,20 +455,22 @@ async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     "No meal choice found for yesterday or in your weekly plan. Defaulting to Non-Veg with no caffeine."
                 )
 
-        ticket_date = datetime.date.today().strftime("%d %b")
-        ticket_date = datetime.date.today().strftime("%d %b")
+        ticket_date = datetime.date.today().strftime("%d %b %Y")
 
-        ticket_text = (
-            f"Name: {student_name}\n"
-            f"Date: {ticket_date}\n"
-            f"Meal: {veg_or_nonveg}\n"
-            f"Caffeine: {caffeine_choice}"
-        )
-
+        # Download profile photo if available
         if profile_file_id:
-            await context.bot.send_photo(chat_id=update.effective_chat.id, photo=profile_file_id, caption=ticket_text)
-        else:
-            await update.message.reply_text(ticket_text + "\n\nNo profile photo found.")
+            try:
+                file = await context.bot.get_file(profile_file_id)
+                profile_photo_bytes = await file.download_as_bytearray()
+            except Exception as e:
+                logger.error(f"Error downloading profile photo: {e}")
+                # Don't fail the entire ticket generation if photo download fails
+
+        # Run image generation in a thread pool executor to avoid blocking the event loop
+        # This speeds up perceived performance for concurrent users
+        byte_io = _generate_ticket_image(student_name, ticket_date, veg_or_nonveg, caffeine_choice, profile_photo_bytes)
+
+        await update.message.reply_photo(photo=byte_io, caption="Here is your food ticket!")
 
     except Exception as e:
         logger.error(f"Error generating ticket: {e}")
