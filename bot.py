@@ -268,8 +268,65 @@ def main() -> None:
     )
     application.add_handler(meal_choice_conv_handler)
 
+    application.add_handler(CommandHandler("ticket", ticket))
+
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
+
+async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Generates and sends a food ticket for today based on yesterday's choice."""
+    user_id = update.effective_user.id
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT id, name, profile_file_id FROM students WHERE tg_user_id = %s", (user_id,))
+        student = cur.fetchone()
+
+        if not student:
+            await update.message.reply_text(
+                "You need to register first using the /start command."
+            )
+            return
+
+        student_id, student_name, profile_file_id = student
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+
+        cur.execute(
+            "SELECT veg_or_nonveg, caffeine_choice FROM meal_choices WHERE student_id = %s AND date = %s",
+            (student_id, yesterday),
+        )
+        meal_choice_data = cur.fetchone()
+
+        if not meal_choice_data:
+            await update.message.reply_text(
+                "No meal choice found for yesterday. Meal Choice should be made using  /mealchoice yesterday."
+            )
+            return
+
+        veg_or_nonveg, caffeine_choice = meal_choice_data
+        ticket_date = datetime.date.today().strftime("%d %b")
+
+        ticket_text = (
+            f"Name: {student_name}\n"
+            f"Date: {ticket_date}\n"
+            f"Meal: {veg_or_nonveg}\n"
+            f"Caffeine: {caffeine_choice}"
+        )
+
+        if profile_file_id:
+            await context.bot.send_photo(chat_id=update.effective_chat.id, photo=profile_file_id, caption=ticket_text)
+        else:
+            await update.message.reply_text(ticket_text + "\n\nNo profile photo found.")
+
+    except Exception as e:
+        logger.error(f"Error generating ticket: {e}")
+        await update.message.reply_text(
+            "An error occurred while generating your ticket. Please try again later."
+        )
+    finally:
+        cur.close()
+        conn.close()
 
 if __name__ == "__main__":
     main()
