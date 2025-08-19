@@ -225,7 +225,13 @@ async def save_meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     cur = conn.cursor()
     try:
         cur.execute(
-            "INSERT INTO meal_choices (student_id, date, veg_or_nonveg, caffeine_choice) VALUES (%s, %s, %s, %s)",
+            """
+            INSERT INTO meal_choices (student_id, date, veg_or_nonveg, caffeine_choice)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (student_id, date) DO UPDATE SET
+                veg_or_nonveg = EXCLUDED.veg_or_nonveg,
+                caffeine_choice = EXCLUDED.caffeine_choice
+            """,
             (student_id, today, veg_or_nonveg, caffeine_choice),
         )
         conn.commit()

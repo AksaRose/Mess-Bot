@@ -56,8 +56,6 @@ function App() {
           snacks: '',
           dinner: '',
         });
-        // Only set message if it's not a 404, or if it's a 404 but we want to inform the user
-        // For this case, we explicitly want to tell the user no menu is found, so we keep the message.
         setMessage(`No menu found for ${selectedWeekday}. You can create one.`);
       } else {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -228,12 +226,12 @@ function App() {
         {activeView === 'editMenu' && (
           <section className="edit-menu-section">
             <h2>Edit Menu</h2>
-            <form onSubmit={handleSubmitMenu} className="menu-form">
+            <form key={weekday} onSubmit={handleSubmitMenu} className="menu-form">
               <div className="form-group full-width">
                 <label htmlFor="weekday-select">Weekday:</label>
                 <select id="weekday-select" value={weekday} onChange={(e) => {
                   setWeekday(e.target.value);
-                  fetchMenuForWeekday(e.target.value); // Fetch menu when weekday changes
+                  // fetchMenuForWeekday is already called by useEffect when weekday changes
                 }}>
                   {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(
                     (day) => (
