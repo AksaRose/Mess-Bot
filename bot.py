@@ -1,4 +1,5 @@
 import logging
+import datetime
 import os
 import psycopg2
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -21,7 +22,14 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Conversation states
-NAME, ADMISSION_NO, PASSOUT_YEAR, PROFILE_PHOTO = range(4)
+(
+    NAME,
+    ADMISSION_NO,
+    PASSOUT_YEAR,
+    PROFILE_PHOTO,
+    MEAL_CHOICE_VEG_NONVEG,
+    MEAL_CHOICE_CAFFEINE,
+) = range(6)
 
 # Database connection function
 def get_db_connection():
@@ -29,7 +37,7 @@ def get_db_connection():
         host=os.getenv("DB_HOST", "localhost"),
         database=os.getenv("DB_NAME", "mess_bot_db"),
         user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD", "postgres")
+        password=os.getenv("DB_PASSWORD", "postgres"),
     )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -144,9 +152,124 @@ def main() -> None:
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    application.add_handler(conv_handler)
+async def meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Starts the meal choice conversation."""
+    user_id = update.effective_user.id
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM students WHERE tg_user_id = %s", (user_id,))
+    student_id = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not student_id:
+        await update.message.reply_text(
+            "You need to register first using the /start command."
+        )
+        return ConversationHandler.END
+
+    context.user_data["student_id"] = student_id[0]
+    reply_keyboard = [["Veg", "Non-Veg"]]
+    await update.message.reply_text(
+        "Veg or Non-Veg?",
+        reply_markup=ReplyKeyboardMarkup(
+            reply_keyboard, one_time_keyboard=True, input_field_placeholder="Veg or Non-Veg?"
+        ),
+    )
+    return MEAL_CHOICE_VEG_NONVEG
+
+
+async def meal_choice_caffeine(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Stores veg/non-veg choice and asks for caffeine option."""
+    veg_or_nonveg = update.message.text
+    if veg_or_nonveg not in ["Veg", "Non-Veg"]:
+        await update.message.reply_text("Invalid choice. Please choose 'Veg' or 'Non-Veg'.")
+        return MEAL_CHOICE_VEG_NONVEG
+    context.user_data["veg_or_nonveg"] = veg_or_nonveg
+    reply_keyboard = [["Tea", "Coffee"], ["Black Coffee", "Black Tea"], ["None"]]
+    await update.message.reply_text(
+        "Caffeine option (Tea / Coffee / Black Coffee / Black Tea / None)?",
+        reply_markup=ReplyKeyboardMarkup(
+            reply_keyboard, one_time_keyboard=True, input_field_placeholder="Caffeine option?"
+        ),
+    )
+    return MEAL_CHOICE_CAFFEINE
+
+
+async def save_meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Stores caffeine choice and saves all meal choice data to the database."""
+    caffeine_choice = update.message.text
+    valid_caffeine_choices = ["Tea", "Coffee", "Black Coffee", "Black Tea", "None"]
+    if caffeine_choice not in valid_caffeine_choices:
+        await update.message.reply_text("Invalid caffeine choice. Please choose from the provided options.")
+        return MEAL_CHOICE_CAFFEINE
+
+    context.user_data["caffeine_choice"] = caffeine_choice
+
+    student_id = context.user_data["student_id"]
+    veg_or_nonveg = context.user_data["veg_or_nonveg"]
+    today = datetime.date.today()
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "INSERT INTO meal_choices (student_id, date, veg_or_nonveg, caffeine_choice) VALUES (%s, %s, %s, %s)",
+            (student_id, today, veg_or_nonveg, caffeine_choice),
+        )
+        conn.commit()
+        await update.message.reply_text(
+            "Your meal choice has been saved for tomorrow!",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error saving meal choice: {e}")
+        await update.message.reply_text(
+            "An error occurred while saving your meal choice. Please try again later.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+    finally:
+        cur.close()
+        conn.close()
+
+    return ConversationHandler.END
+
+
+def main() -> None:
+    """Start the bot."""
+    application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).build()
+
+    # Add conversation handler for student registration
+    registration_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_admission_no)],
+            ADMISSION_NO: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_passout_year)],
+            PASSOUT_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_profile_photo)],
+            PROFILE_PHOTO: [MessageHandler(filters.PHOTO, save_student_data)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    application.add_handler(registration_conv_handler)
+
+    # Add conversation handler for meal choice
+    meal_choice_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("mealchoice", meal_choice)],
+        states={
+            MEAL_CHOICE_VEG_NONVEG: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, meal_choice_caffeine)
+            ],
+            MEAL_CHOICE_CAFFEINE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, save_meal_choice)
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    application.add_handler(meal_choice_conv_handler)
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
+
 
 if __name__ == "__main__":
     main()

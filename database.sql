@@ -15,3 +15,11 @@ CREATE TABLE mess_records (
     amount DECIMAL(10, 2) NOT NULL,
     recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE meal_choices (
+    id SERIAL PRIMARY KEY,
+    student_id INT NOT NULL REFERENCES students(id),
+    date DATE NOT NULL,
+    veg_or_nonveg VARCHAR(10) NOT NULL,
+    caffeine_choice VARCHAR(10) NOT NULL
+);
