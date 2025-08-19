@@ -42,6 +42,11 @@ logger = logging.getLogger(__name__)
     WEEKLY_CHOICE_CAFFEINE,
 ) = range(6, 9) # Continue range from previous states
 
+# States for view menu conversation
+(
+    VIEW_MENU_DAY,
+) = range(9, 10) # Continue range
+
 # Database connection function
 def get_db_connection():
     return psycopg2.connect(
@@ -340,6 +345,21 @@ def main() -> None:
     )
     application.add_handler(weekly_choice_conv_handler)
 
+    # Add conversation handler for view menu
+    view_menu_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("menu", view_menu_start)],
+        states={
+            VIEW_MENU_DAY: [
+                MessageHandler(
+                    filters.Regex("^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$"),
+                    display_menu_for_day,
+                )
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    application.add_handler(view_menu_conv_handler)
+ 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
@@ -596,6 +616,46 @@ async def done_weekly_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "Weekly meal plan setup complete! You can start again with /weeklychoice.",
         reply_markup=ReplyKeyboardRemove(),
     )
+    return ConversationHandler.END
+
+async def view_menu_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Starts the conversation to view menu for a specific day."""
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    reply_keyboard = [weekdays[i:i+3] for i in range(0, len(weekdays), 3)] # Group by 3 for keyboard layout
+    
+    await update.message.reply_text(
+        "Which day's menu would you like to see?",
+        reply_markup=ReplyKeyboardMarkup(
+            reply_keyboard, one_time_keyboard=True, input_field_placeholder="Select a day"
+        ),
+    )
+    return VIEW_MENU_DAY
+
+async def display_menu_for_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Fetches and displays the menu for the selected day."""
+    selected_weekday = update.message.text
+    
+    menu_api_url = os.getenv("MENU_API_URL", "http://127.0.0.1:8000")
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{menu_api_url}/menu/{selected_weekday}")
+            response.raise_for_status()  # Raise an exception for HTTP errors
+            menu_data = response.json()
+
+            menu_text = f"Menu for {selected_weekday}:\n"
+            menu_text += f"Breakfast: {menu_data.get('breakfast', 'N/A')}\n"
+            menu_text += f"Lunch: {menu_data.get('lunch', 'N/A')}\n"
+            menu_text += f"Snacks: {menu_data.get('snacks', 'N/A')}\n"
+            menu_text += f"Dinner: {menu_data.get('dinner', 'N/A')}"
+            await update.message.reply_text(menu_text, reply_markup=ReplyKeyboardRemove())
+
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"Could not fetch menu for {selected_weekday}: {e.response.status_code} - {e.response.text}")
+        await update.message.reply_text(f"Could not fetch menu for {selected_weekday} at this time.", reply_markup=ReplyKeyboardRemove())
+    except httpx.RequestError as e:
+        logger.error(f"Error making request to menu API: {e}")
+        await update.message.reply_text("An error occurred while trying to fetch the menu.", reply_markup=ReplyKeyboardRemove())
+    
     return ConversationHandler.END
 
 if __name__ == "__main__":
