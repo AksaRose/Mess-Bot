@@ -30,7 +30,8 @@ CREATE TABLE meal_choices (
     student_id INT NOT NULL REFERENCES students(id),
     date DATE NOT NULL,
     veg_or_nonveg VARCHAR(10) NOT NULL,
-    caffeine_choice VARCHAR(10) NOT NULL
+    caffeine_choice VARCHAR(10) NOT NULL,
+    UNIQUE (student_id, date)
 );
 
 CREATE TABLE menus (
