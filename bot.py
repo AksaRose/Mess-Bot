@@ -164,7 +164,7 @@ def main() -> None:
     )
 
 async def meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Starts the meal choice conversation."""
+    """Starts the meal choice conversation by displaying tomorrow's menu."""
     user_id = update.effective_user.id
     conn = get_db_connection()
     cur = conn.cursor()
@@ -180,6 +180,30 @@ async def meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         return ConversationHandler.END
 
     context.user_data["student_id"] = student_id[0]
+
+    # Fetch and display tomorrow's menu
+    tomorrow_weekday = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%A")
+    menu_api_url = os.getenv("MENU_API_URL", "http://127.0.0.1:8000")
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{menu_api_url}/menu/{tomorrow_weekday}")
+            response.raise_for_status()  # Raise an exception for HTTP errors
+            menu_data = response.json()
+
+            menu_text = f"Tomorrow's Menu ({tomorrow_weekday}):\n"
+            menu_text += f"Breakfast: {menu_data.get('breakfast', 'N/A')}\n"
+            menu_text += f"Lunch: {menu_data.get('lunch', 'N/A')}\n"
+            menu_text += f"Snacks: {menu_data.get('snacks', 'N/A')}\n"
+            menu_text += f"Dinner: {menu_data.get('dinner', 'N/A')}"
+            await update.message.reply_text(menu_text)
+
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"Could not fetch tomorrow's menu: {e.response.status_code} - {e.response.text}")
+        await update.message.reply_text("Could not fetch tomorrow's menu at this time.")
+    except httpx.RequestError as e:
+        logger.error(f"Error making request to menu API: {e}")
+        await update.message.reply_text("An error occurred while trying to fetch tomorrow's menu.")
+
     reply_keyboard = [["Veg", "Non-Veg"]]
     await update.message.reply_text(
         "Veg or Non-Veg?",
@@ -240,28 +264,6 @@ async def save_meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             reply_markup=ReplyKeyboardRemove(),
         )
 
-        # Fetch and display tomorrow's menu
-        tomorrow_weekday = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%A")
-        menu_api_url = os.getenv("MENU_API_URL", "http://127.0.0.1:8000")
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(f"{menu_api_url}/menu/{tomorrow_weekday}")
-                response.raise_for_status()  # Raise an exception for HTTP errors
-                menu_data = response.json()
-
-                menu_text = f"Tomorrow's Menu ({tomorrow_weekday}):\n"
-                menu_text += f"Breakfast: {menu_data.get('breakfast', 'N/A')}\n"
-                menu_text += f"Lunch: {menu_data.get('lunch', 'N/A')}\n"
-                menu_text += f"Snacks: {menu_data.get('snacks', 'N/A')}\n"
-                menu_text += f"Dinner: {menu_data.get('dinner', 'N/A')}"
-                await update.message.reply_text(menu_text)
-
-        except httpx.HTTPStatusError as e:
-            logger.warning(f"Could not fetch tomorrow's menu: {e.response.status_code} - {e.response.text}")
-            await update.message.reply_text("Could not fetch tomorrow's menu at this time.")
-        except httpx.RequestError as e:
-            logger.error(f"Error making request to menu API: {e}")
-            await update.message.reply_text("An error occurred while trying to fetch tomorrow's menu.")
 
     except Exception as e:
         conn.rollback()
@@ -444,11 +446,34 @@ async def weekly_choice_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     return WEEKLY_CHOICE_DAY
 
 async def weekly_choice_veg_nonveg(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Stores the selected day and asks for veg/non-veg choice."""
+    """Displays the menu for the selected day and asks for veg/non-veg choice."""
     message_text = update.message.text
     
     context.user_data["current_weekday"] = message_text
-    
+    current_weekday = context.user_data["current_weekday"]
+
+    # Fetch and display menu for the selected day
+    menu_api_url = os.getenv("MENU_API_URL", "http://127.0.0.1:8000")
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{menu_api_url}/menu/{current_weekday}")
+            response.raise_for_status()  # Raise an exception for HTTP errors
+            menu_data = response.json()
+
+            menu_text = f"Menu for {current_weekday}:\n"
+            menu_text += f"Breakfast: {menu_data.get('breakfast', 'N/A')}\n"
+            menu_text += f"Lunch: {menu_data.get('lunch', 'N/A')}\n"
+            menu_text += f"Snacks: {menu_data.get('snacks', 'N/A')}\n"
+            menu_text += f"Dinner: {menu_data.get('dinner', 'N/A')}"
+            await update.message.reply_text(menu_text)
+
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"Could not fetch menu for {current_weekday}: {e.response.status_code} - {e.response.text}")
+        await update.message.reply_text(f"Could not fetch menu for {current_weekday} at this time.")
+    except httpx.RequestError as e:
+        logger.error(f"Error making request to menu API: {e}")
+        await update.message.reply_text("An error occurred while trying to fetch the menu.")
+
     reply_keyboard = [["Veg", "Non-Veg"]]
     if context.user_data["first_day_set"]: # Only add "Skip" and "Done" after the first day
         reply_keyboard.append(["Skip this day", "Done"])
