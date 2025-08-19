@@ -348,7 +348,14 @@ def main() -> None:
     )
     application.add_handler(view_menu_conv_handler)
  
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # For Railway deployment, switch to webhook mode
+    # The URL and port will be provided by Railway
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=int(os.environ.get("PORT", "8080")),
+        url_path=os.environ.get("WEBHOOK_PATH", ""),
+        webhook_url=os.environ.get("WEBHOOK_URL", "") + os.environ.get("WEBHOOK_PATH", "")
+    )
 
 
 import io
