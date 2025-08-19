@@ -83,8 +83,14 @@ async def get_menu(weekday: str):
                 "dinner": row["dinner"]
             }
         raise HTTPException(status_code=404, detail=f"Menu for {weekday} not found.")
+    except asyncpg.exceptions.PostgresError as e:
+        # Catch specific PostgreSQL errors if needed, otherwise re-raise as 500
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+    except HTTPException: # Re-raise HTTPException directly
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Catch other unexpected errors
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
     finally:
         if conn:
             await conn.close()

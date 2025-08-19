@@ -18,8 +18,10 @@ function App() {
   useEffect(() => {
     if (activeView === 'mealCounts') {
       fetchMealCounts();
+    } else if (activeView === 'editMenu') {
+      fetchMenuForWeekday(weekday);
     }
-  }, [activeView]); // Re-fetch when view changes
+  }, [activeView, weekday]); // Re-fetch when view changes or weekday changes
 
   const fetchMealCounts = async () => {
     try {
@@ -32,6 +34,43 @@ function App() {
     } catch (error) {
       console.error('Error fetching meal counts:', error);
       setMessage('Error fetching meal counts.');
+    }
+  };
+
+  const fetchMenuForWeekday = async (selectedWeekday) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/menu/${selectedWeekday}`);
+      if (response.ok) {
+        const data = await response.json();
+        setMenu({
+          breakfast: data.breakfast || '',
+          lunch: data.lunch || '',
+          snacks: data.snacks || '',
+          dinner: data.dinner || '',
+        });
+        setMessage(''); // Clear message on successful fetch
+      } else if (response.status === 404) {
+        setMenu({
+          breakfast: '',
+          lunch: '',
+          snacks: '',
+          dinner: '',
+        });
+        // Only set message if it's not a 404, or if it's a 404 but we want to inform the user
+        // For this case, we explicitly want to tell the user no menu is found, so we keep the message.
+        setMessage(`No menu found for ${selectedWeekday}. You can create one.`);
+      } else {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Error fetching menu:', error);
+      // Check if the error is an HTTP error and not a 404
+      if (error.response && error.response.status && error.response.status !== 404) {
+          setMessage('Error fetching menu.');
+      } else if (!error.response) { // Catch network errors or other non-HTTP errors
+          setMessage('Error fetching menu: Network or server issue.');
+      }
+      // If it's a 404, the message is already set by the else if (response.status === 404) block
     }
   };
 
@@ -59,6 +98,8 @@ function App() {
       }
       const data = await response.json();
       setMessage(data.message);
+      // After saving, re-fetch the menu to ensure consistency
+      fetchMenuForWeekday(weekday); 
     } catch (error) {
       console.error('Error submitting menu:', error);
       setMessage('Error submitting menu.');
@@ -78,7 +119,7 @@ function App() {
 
         {activeView === 'mealCounts' && (
           <section className="meal-counts-section">
-            <h2>Tomorrow's Meal Counts ({mealCounts ? mealCounts.date : 'Loading...'})</h2>
+            <h2>Tomorrow's Meal Counts ({mealCounts ? mealCounts.date : 'None'})</h2>
             {mealCounts ? (
               <div className="meal-counts-container">
                 <div className="meal-type-counts">
@@ -179,7 +220,7 @@ function App() {
                 </div>
               </div>
             ) : (
-              <p>Loading meal counts...</p>
+              <p>No meal counts data available.</p>
             )}
           </section>
         )}
@@ -190,7 +231,10 @@ function App() {
             <form onSubmit={handleSubmitMenu} className="menu-form">
               <div className="form-group full-width">
                 <label htmlFor="weekday-select">Weekday:</label>
-                <select id="weekday-select" value={weekday} onChange={(e) => setWeekday(e.target.value)}>
+                <select id="weekday-select" value={weekday} onChange={(e) => {
+                  setWeekday(e.target.value);
+                  fetchMenuForWeekday(e.target.value); // Fetch menu when weekday changes
+                }}>
                   {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(
                     (day) => (
                       <option key={day} value={day}>
