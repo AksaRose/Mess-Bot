@@ -323,12 +323,13 @@ def main() -> None:
             ],
             WEEKLY_CHOICE_VEG_NONVEG: [
                 MessageHandler(
-                    filters.Regex("^(Veg|Non-Veg|Skip this day|Done)$"), weekly_choice_caffeine
+                    filters.TEXT & ~filters.COMMAND, # Accept any text for initial processing
+                    weekly_choice_caffeine
                 )
             ],
             WEEKLY_CHOICE_CAFFEINE: [
                 MessageHandler(
-                    filters.Regex("^(Tea|Coffee|Black Coffee|Black Tea|None|Skip this day|Done)$"),
+                    filters.TEXT & ~filters.COMMAND, # Accept any text for initial processing
                     weekly_choice_save,
                 )
             ],
@@ -429,6 +430,7 @@ async def weekly_choice_start(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     context.user_data["student_id"] = student_id[0]
     context.user_data["weekly_choices"] = {}  # Initialize dictionary to store choices
+    context.user_data["first_day_set"] = False # Flag to track if the first day has been set
 
     weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     reply_keyboard = [weekdays[i:i+3] for i in range(0, len(weekdays), 3)] # Group by 3 for keyboard layout
@@ -443,19 +445,32 @@ async def weekly_choice_start(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def weekly_choice_veg_nonveg(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Stores the selected day and asks for veg/non-veg choice."""
-    context.user_data["current_weekday"] = update.message.text
+    message_text = update.message.text
+    
+    context.user_data["current_weekday"] = message_text
+    
     reply_keyboard = [["Veg", "Non-Veg"]]
+    if context.user_data["first_day_set"]: # Only add "Skip" and "Done" after the first day
+        reply_keyboard.append(["Skip this day", "Done"])
+    
     await update.message.reply_text(
         f"For {context.user_data['current_weekday']}, Veg or Non-Veg?",
         reply_markup=ReplyKeyboardMarkup(
             reply_keyboard, one_time_keyboard=True, input_field_placeholder="Veg or Non-Veg?"
         ),
     )
+    context.user_data["first_day_set"] = True # Set flag after the first day's question
     return WEEKLY_CHOICE_VEG_NONVEG
 
 async def weekly_choice_caffeine(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Stores veg/non-veg choice and asks for caffeine option."""
-    context.user_data["current_veg_nonveg"] = update.message.text
+    message_text = update.message.text
+    if message_text == "Done":
+        return await done_weekly_choice(update, context)
+    if message_text == "Skip this day":
+        return await skip_day(update, context)
+
+    context.user_data["current_veg_nonveg"] = message_text
     reply_keyboard = [["Tea", "Coffee"], ["Black Coffee", "Black Tea"], ["None"]]
     await update.message.reply_text(
         "Caffeine option (Tea / Coffee / Black Coffee / Black Tea / None)?",
@@ -467,9 +482,14 @@ async def weekly_choice_caffeine(update: Update, context: ContextTypes.DEFAULT_T
 
 async def weekly_choice_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Stores caffeine choice and saves the weekly choice for the day to the database."""
+    caffeine_choice = update.message.text
+    if caffeine_choice == "Done":
+        return await done_weekly_choice(update, context)
+    if caffeine_choice == "Skip this day":
+        return await skip_day(update, context)
+    
     current_weekday = context.user_data["current_weekday"]
     veg_or_nonveg = context.user_data["current_veg_nonveg"]
-    caffeine_choice = update.message.text
     student_id = context.user_data["student_id"]
 
     conn = get_db_connection()
@@ -508,23 +528,23 @@ async def weekly_choice_save(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if current_day_index + 1 < len(weekdays):
         next_weekday = weekdays[current_day_index + 1]
         context.user_data["current_weekday"] = next_weekday
-        reply_keyboard = [["Veg", "Non-Veg"], ["Skip this day", "Done"]]
+        reply_keyboard = [weekdays[i:i+3] for i in range(0, len(weekdays), 3)] # Group by 3 for keyboard layout
         await update.message.reply_text(
-            f"What about {next_weekday}? Veg or Non-Veg?",
+            f"What about {next_weekday}? Which day would you like to set?", # New prompt
             reply_markup=ReplyKeyboardMarkup(
-                reply_keyboard, one_time_keyboard=True, input_field_placeholder="Veg or Non-Veg?"
+                reply_keyboard, one_time_keyboard=True, input_field_placeholder="Select a day"
             ),
         )
-        return WEEKLY_CHOICE_VEG_NONVEG
+        return WEEKLY_CHOICE_DAY # Go back to asking for a day
     else:
-        await update.message.reply_text(
-            "You have set your weekly meal plan for all days. You can start again with /weeklychoice.",
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        return ConversationHandler.END
+        return await done_weekly_choice(update, context)
 
 async def skip_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Skips setting choice for the current day and moves to the next."""
+    message_text = update.message.text
+    if message_text == "Done":
+        return await done_weekly_choice(update, context)
+
     current_weekday = context.user_data["current_weekday"]
     await update.message.reply_text(f"Skipped {current_weekday}.")
     
@@ -534,20 +554,16 @@ async def skip_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if current_day_index + 1 < len(weekdays):
         next_weekday = weekdays[current_day_index + 1]
         context.user_data["current_weekday"] = next_weekday
-        reply_keyboard = [["Veg", "Non-Veg"], ["Skip this day", "Done"]]
+        reply_keyboard = [weekdays[i:i+3] for i in range(0, len(weekdays), 3)] # Group by 3 for keyboard layout
         await update.message.reply_text(
-            f"What about {next_weekday}? Veg or Non-Veg?",
+            f"What about {next_weekday}? Which day would you like to set?", # New prompt
             reply_markup=ReplyKeyboardMarkup(
-                reply_keyboard, one_time_keyboard=True, input_field_placeholder="Veg or Non-Veg?"
+                reply_keyboard, one_time_keyboard=True, input_field_placeholder="Select a day"
             ),
         )
-        return WEEKLY_CHOICE_VEG_NONVEG
+        return WEEKLY_CHOICE_DAY # Go back to asking for a day
     else:
-        await update.message.reply_text(
-            "You have set your weekly meal plan for all days. You can start again with /weeklychoice.",
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        return ConversationHandler.END
+        return await done_weekly_choice(update, context)
 
 async def done_weekly_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Ends the weekly choice conversation."""
