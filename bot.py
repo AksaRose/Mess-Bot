@@ -2,6 +2,8 @@ import logging
 import datetime
 import os
 import psycopg2
+import httpx # Import httpx
+from dotenv import load_dotenv # Import load_dotenv
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Application,
@@ -11,6 +13,8 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+
+load_dotenv() # Load environment variables from .env file
 
 # Enable logging
 logging.basicConfig(
@@ -30,6 +34,13 @@ logger = logging.getLogger(__name__)
     MEAL_CHOICE_VEG_NONVEG,
     MEAL_CHOICE_CAFFEINE,
 ) = range(6)
+
+# States for weekly choice conversation
+(
+    WEEKLY_CHOICE_DAY,
+    WEEKLY_CHOICE_VEG_NONVEG,
+    WEEKLY_CHOICE_CAFFEINE,
+) = range(6, 9) # Continue range from previous states
 
 # Database connection function
 def get_db_connection():
@@ -222,6 +233,30 @@ async def save_meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             "Your meal choice has been saved for tomorrow!",
             reply_markup=ReplyKeyboardRemove(),
         )
+
+        # Fetch and display tomorrow's menu
+        tomorrow_weekday = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%A")
+        menu_api_url = os.getenv("MENU_API_URL", "http://127.0.0.1:8000")
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{menu_api_url}/menu/{tomorrow_weekday}")
+                response.raise_for_status()  # Raise an exception for HTTP errors
+                menu_data = response.json()
+
+                menu_text = f"Tomorrow's Menu ({tomorrow_weekday}):\n"
+                menu_text += f"Breakfast: {menu_data.get('breakfast', 'N/A')}\n"
+                menu_text += f"Lunch: {menu_data.get('lunch', 'N/A')}\n"
+                menu_text += f"Snacks: {menu_data.get('snacks', 'N/A')}\n"
+                menu_text += f"Dinner: {menu_data.get('dinner', 'N/A')}"
+                await update.message.reply_text(menu_text)
+
+        except httpx.HTTPStatusError as e:
+            logger.warning(f"Could not fetch tomorrow's menu: {e.response.status_code} - {e.response.text}")
+            await update.message.reply_text("Could not fetch tomorrow's menu at this time.")
+        except httpx.RequestError as e:
+            logger.error(f"Error making request to menu API: {e}")
+            await update.message.reply_text("An error occurred while trying to fetch tomorrow's menu.")
+
     except Exception as e:
         conn.rollback()
         logger.error(f"Error saving meal choice: {e}")
@@ -270,6 +305,32 @@ def main() -> None:
 
     application.add_handler(CommandHandler("ticket", ticket))
 
+    # Add conversation handler for weekly choice
+    weekly_choice_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("weeklychoice", weekly_choice_start)],
+        states={
+            WEEKLY_CHOICE_DAY: [
+                MessageHandler(
+                    filters.Regex("^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$"),
+                    weekly_choice_veg_nonveg,
+                )
+            ],
+            WEEKLY_CHOICE_VEG_NONVEG: [
+                MessageHandler(
+                    filters.Regex("^(Veg|Non-Veg|Skip this day|Done)$"), weekly_choice_caffeine
+                )
+            ],
+            WEEKLY_CHOICE_CAFFEINE: [
+                MessageHandler(
+                    filters.Regex("^(Tea|Coffee|Black Coffee|Black Tea|None|Skip this day|Done)$"),
+                    weekly_choice_save,
+                )
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    application.add_handler(weekly_choice_conv_handler)
+
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
@@ -292,19 +353,35 @@ async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         student_id, student_name, profile_file_id = student
         yesterday = datetime.date.today() - datetime.timedelta(days=1)
 
+        # 1. Check for today's meal choice (made yesterday)
         cur.execute(
             "SELECT veg_or_nonveg, caffeine_choice FROM meal_choices WHERE student_id = %s AND date = %s",
             (student_id, yesterday),
         )
         meal_choice_data = cur.fetchone()
 
-        if not meal_choice_data:
-            await update.message.reply_text(
-                "No meal choice found for yesterday. Meal Choice should be made using  /mealchoice yesterday."
+        if meal_choice_data:
+            veg_or_nonveg, caffeine_choice = meal_choice_data
+        else:
+            # 2. Else check weekly choice
+            today_weekday = datetime.date.today().strftime("%A")
+            cur.execute(
+                "SELECT veg_or_nonveg, caffeine_choice FROM weekly_choices WHERE student_id = %s AND weekday = %s",
+                (student_id, today_weekday),
             )
-            return
+            weekly_choice_data = cur.fetchone()
 
-        veg_or_nonveg, caffeine_choice = meal_choice_data
+            if weekly_choice_data:
+                veg_or_nonveg, caffeine_choice = weekly_choice_data
+            else:
+                # 3. Else default to Non-Veg
+                veg_or_nonveg = "Non-Veg"
+                caffeine_choice = "None"
+                await update.message.reply_text(
+                    "No meal choice found for yesterday or in your weekly plan. Defaulting to Non-Veg with no caffeine."
+                )
+
+        ticket_date = datetime.date.today().strftime("%d %b")
         ticket_date = datetime.date.today().strftime("%d %b")
 
         ticket_text = (
@@ -327,6 +404,152 @@ async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     finally:
         cur.close()
         conn.close()
+
+async def weekly_choice_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Starts the weekly meal choice conversation."""
+    user_id = update.effective_user.id
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM students WHERE tg_user_id = %s", (user_id,))
+    student_id = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not student_id:
+        await update.message.reply_text(
+            "You need to register first using the /start command."
+        )
+        return ConversationHandler.END
+
+    context.user_data["student_id"] = student_id[0]
+    context.user_data["weekly_choices"] = {}  # Initialize dictionary to store choices
+
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    reply_keyboard = [weekdays[i:i+3] for i in range(0, len(weekdays), 3)] # Group by 3 for keyboard layout
+
+    await update.message.reply_text(
+        "Let's set up your weekly meal plan. Which day would you like to set first?",
+        reply_markup=ReplyKeyboardMarkup(
+            reply_keyboard, one_time_keyboard=True, input_field_placeholder="Select a day"
+        ),
+    )
+    return WEEKLY_CHOICE_DAY
+
+async def weekly_choice_veg_nonveg(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Stores the selected day and asks for veg/non-veg choice."""
+    context.user_data["current_weekday"] = update.message.text
+    reply_keyboard = [["Veg", "Non-Veg"]]
+    await update.message.reply_text(
+        f"For {context.user_data['current_weekday']}, Veg or Non-Veg?",
+        reply_markup=ReplyKeyboardMarkup(
+            reply_keyboard, one_time_keyboard=True, input_field_placeholder="Veg or Non-Veg?"
+        ),
+    )
+    return WEEKLY_CHOICE_VEG_NONVEG
+
+async def weekly_choice_caffeine(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Stores veg/non-veg choice and asks for caffeine option."""
+    context.user_data["current_veg_nonveg"] = update.message.text
+    reply_keyboard = [["Tea", "Coffee"], ["Black Coffee", "Black Tea"], ["None"]]
+    await update.message.reply_text(
+        "Caffeine option (Tea / Coffee / Black Coffee / Black Tea / None)?",
+        reply_markup=ReplyKeyboardMarkup(
+            reply_keyboard, one_time_keyboard=True, input_field_placeholder="Caffeine option?"
+        ),
+    )
+    return WEEKLY_CHOICE_CAFFEINE
+
+async def weekly_choice_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Stores caffeine choice and saves the weekly choice for the day to the database."""
+    current_weekday = context.user_data["current_weekday"]
+    veg_or_nonveg = context.user_data["current_veg_nonveg"]
+    caffeine_choice = update.message.text
+    student_id = context.user_data["student_id"]
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            INSERT INTO weekly_choices (student_id, weekday, veg_or_nonveg, caffeine_choice)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (student_id, weekday) DO UPDATE SET
+                veg_or_nonveg = EXCLUDED.veg_or_nonveg,
+                caffeine_choice = EXCLUDED.caffeine_choice
+            """,
+            (student_id, current_weekday, veg_or_nonveg, caffeine_choice),
+        )
+        conn.commit()
+        await update.message.reply_text(
+            f"Your choice for {current_weekday} has been saved: {veg_or_nonveg}, {caffeine_choice}.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error saving weekly choice: {e}")
+        await update.message.reply_text(
+            "An error occurred while saving your weekly choice. Please try again.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+    finally:
+        cur.close()
+        conn.close()
+
+    # Ask for next day or end conversation
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    current_day_index = weekdays.index(current_weekday)
+    
+    if current_day_index + 1 < len(weekdays):
+        next_weekday = weekdays[current_day_index + 1]
+        context.user_data["current_weekday"] = next_weekday
+        reply_keyboard = [["Veg", "Non-Veg"], ["Skip this day", "Done"]]
+        await update.message.reply_text(
+            f"What about {next_weekday}? Veg or Non-Veg?",
+            reply_markup=ReplyKeyboardMarkup(
+                reply_keyboard, one_time_keyboard=True, input_field_placeholder="Veg or Non-Veg?"
+            ),
+        )
+        return WEEKLY_CHOICE_VEG_NONVEG
+    else:
+        await update.message.reply_text(
+            "You have set your weekly meal plan for all days. You can start again with /weeklychoice.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return ConversationHandler.END
+
+async def skip_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Skips setting choice for the current day and moves to the next."""
+    current_weekday = context.user_data["current_weekday"]
+    await update.message.reply_text(f"Skipped {current_weekday}.")
+    
+    weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    current_day_index = weekdays.index(current_weekday)
+    
+    if current_day_index + 1 < len(weekdays):
+        next_weekday = weekdays[current_day_index + 1]
+        context.user_data["current_weekday"] = next_weekday
+        reply_keyboard = [["Veg", "Non-Veg"], ["Skip this day", "Done"]]
+        await update.message.reply_text(
+            f"What about {next_weekday}? Veg or Non-Veg?",
+            reply_markup=ReplyKeyboardMarkup(
+                reply_keyboard, one_time_keyboard=True, input_field_placeholder="Veg or Non-Veg?"
+            ),
+        )
+        return WEEKLY_CHOICE_VEG_NONVEG
+    else:
+        await update.message.reply_text(
+            "You have set your weekly meal plan for all days. You can start again with /weeklychoice.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return ConversationHandler.END
+
+async def done_weekly_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Ends the weekly choice conversation."""
+    await update.message.reply_text(
+        "Weekly meal plan setup complete! You can start again with /weeklychoice.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    return ConversationHandler.END
 
 if __name__ == "__main__":
     main()
