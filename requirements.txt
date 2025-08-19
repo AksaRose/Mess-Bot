@@ -3,4 +3,4 @@ psycopg2-binary
 fastapi
 uvicorn
 asyncpg
-python-dotenv
+python-dotenvPillow
