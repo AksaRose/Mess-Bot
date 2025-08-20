@@ -43,7 +43,7 @@ async def create_or_update_menu(menu: Menu):
         conn = await get_db_connection()
         await conn.execute(
             """
-            INSERT INTO menus (weekday, breakfast, lunch, snacks, dinner)
+            INSERT INTO menu (weekday, breakfast, lunch, snacks, dinner)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (weekday) DO UPDATE SET
                 breakfast = EXCLUDED.breakfast,
@@ -66,7 +66,7 @@ async def get_menu(weekday: str):
     try:
         conn = await get_db_connection()
         row = await conn.fetchrow(
-            "SELECT breakfast, lunch, snacks, dinner FROM menus WHERE weekday = $1",
+            "SELECT breakfast, lunch, snacks, dinner FROM menu WHERE weekday = $1",
             weekday
         )
         if row:
