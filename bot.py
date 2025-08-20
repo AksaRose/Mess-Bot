@@ -483,16 +483,16 @@ async def generate_ticket_image(
     text_x_start = img_width // 2 + 100 # Adjusted x position for larger fonts
     
     # Add text details
-    d.text((text_x_start, 300), name, fill=(0, 0, 0), font=name_font) # Adjusted Y position
-    d.text((text_x_start, 700), f"Date: {date_str}", fill=(0, 0, 0), font=date_font) # Adjusted Y position
+    d.text((text_x_start, 400), name, fill=(0, 0, 0), font=name_font) # Adjusted Y position
+    d.text((text_x_start, 600), f"Date: {date_str}", fill=(0, 0, 0), font=date_font) # Adjusted Y position
     # Adjust position for multi-line meal choice text
     # Calculate text height using textbbox for accurate positioning
     bbox_veg_nonveg = veg_nonveg_font.getbbox(veg_nonveg)
     text_height_veg_nonveg = bbox_veg_nonveg[3] - bbox_veg_nonveg[1]
 
     # Adjusted positions for larger image and clearer separation
-    d.text((text_x_start, 1800), veg_nonveg, fill=(0, 0, 0), font=veg_nonveg_font) # Adjusted Y position
-    d.text((text_x_start, 1800 + text_height_veg_nonveg + 120), caffeine, fill=(0, 0, 0), font=caffeine_font) # Adjusted Y position and increased padding
+    d.text((text_x_start, 1500), veg_nonveg, fill=(0, 0, 0), font=veg_nonveg_font) # Adjusted Y position
+    d.text((text_x_start, 1500 + text_height_veg_nonveg + 120), caffeine, fill=(0, 0, 0), font=caffeine_font) # Adjusted Y position and increased padding
     # Removed the "🎫 Food Ticket" text
 
     # Convert to bytes
