@@ -453,10 +453,10 @@ async def generate_ticket_image(
 
     try:
         # Try to load Arial.ttf or a similar common font
-        name_font = ImageFont.truetype("arial.ttf", 50)
-        date_font = ImageFont.truetype("arial.ttf", 40)
-        choice_font = ImageFont.truetype("arial.ttf", 60) # Make this "so so big"
-        ticket_title_font = ImageFont.truetype("arial.ttf", 45)
+        name_font = ImageFont.truetype("arial.ttf", 60)
+        date_font = ImageFont.truetype("arial.ttf", 50)
+        choice_font = ImageFont.truetype("arial.ttf", 80) # Even bigger
+        ticket_title_font = ImageFont.truetype("arial.ttf", 55)
     except IOError:
         # Fallback to default font if Arial.ttf is not found
         logger.warning("Arial.ttf font not found. Falling back to default PIL font. Text size may be smaller than desired.")
