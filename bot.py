@@ -458,6 +458,7 @@ async def generate_ticket_image(
         date_font = ImageFont.truetype(font_path, 50)
         veg_nonveg_font = ImageFont.truetype(font_path, 80) # "so so big"
         caffeine_font = ImageFont.truetype(font_path, 60) # Smaller for caffeine
+        ticket_title_font = ImageFont.truetype(font_path, 55)
     except IOError:
         logger.error(f"Font file not found at {font_path}. Falling back to default PIL font.")
         name_font = ImageFont.load_default()
