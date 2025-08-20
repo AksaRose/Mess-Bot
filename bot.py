@@ -449,7 +449,7 @@ async def generate_ticket_image(
 
     # Create ticket image
     # Increase image size to make default font appear larger
-    img_width, img_height = 2560, 2560 # Set to a Telegram-compatible large size
+    img_width, img_height = 2560, 2000 # Set to a Telegram-compatible large size
     img = Image.new("RGB", (img_width, img_height), color="white")
     d = ImageDraw.Draw(img)
 
@@ -477,7 +477,7 @@ async def generate_ticket_image(
     y_position = (img_height - profile_img.height) // 2
 
     # Paste profile photo on the left side, centered vertically with left padding
-    img.paste(profile_img, (50, y_position)) # Added 50 pixels of left padding
+    img.paste(profile_img, (150, y_position)) # Added 50 pixels of left padding
 
     # Calculate text positions for the right side
     text_x_start = img_width // 2 + 100 # Adjusted x position for larger fonts
