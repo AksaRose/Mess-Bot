@@ -449,18 +449,18 @@ async def generate_ticket_image(
 
     # Create ticket image
     # Increase image size to make default font appear larger
-    img_width, img_height = 1200, 600 # Extremely large size for maximum impact
+    img_width, img_height = 9600, 9600 # Increased height and made square for larger ticket
     img = Image.new("RGB", (img_width, img_height), color="white")
     d = ImageDraw.Draw(img)
 
     font_path = "fonts/Roboto_Condensed-Bold.ttf" # Path to the bundled font
 
     try:
-        name_font = ImageFont.truetype(font_path, 120) # Doubled font size
-        date_font = ImageFont.truetype(font_path, 90) # Doubled font size
-        veg_nonveg_font = ImageFont.truetype(font_path, 150) # Doubled font size
-        caffeine_font = ImageFont.truetype(font_path, 120) # Doubled font size
-        ticket_title_font = ImageFont.truetype(font_path, 440) # Doubled font size
+        name_font = ImageFont.truetype(font_path, 600) # Scaled up font size
+        date_font = ImageFont.truetype(font_path, 500) # Scaled up font size
+        veg_nonveg_font = ImageFont.truetype(font_path, 900) # Scaled up font size
+        caffeine_font = ImageFont.truetype(font_path, 600) # Scaled up font size
+        ticket_title_font = ImageFont.truetype(font_path, 550) # Scaled up font size
     except IOError:
         logger.error(f"Font file not found at {font_path}. Falling back to default PIL font.")
         name_font = ImageFont.load_default()
@@ -477,19 +477,19 @@ async def generate_ticket_image(
     img.paste(profile_img, (0, 0))
 
     # Calculate text positions for the right side
-    text_x_start = img_width // 2 + 480 # Doubled text x position
+    text_x_start = img_width // 2 + 600 # Scaled up text x position
     
     # Add text details
-    d.text((text_x_start, 320), name, fill=(0, 0, 0), font=name_font) # Doubled Y position
-    d.text((text_x_start, 800), f"Date: {date_str}", fill=(0, 0, 0), font=date_font) # Doubled Y position
+    d.text((text_x_start, 800), name, fill=(0, 0, 0), font=name_font) # Adjusted Y position for taller image
+    d.text((text_x_start, 2000), f"Date: {date_str}", fill=(0, 0, 0), font=date_font) # Adjusted Y position for taller image
     # Adjust position for multi-line meal choice text
     # Calculate text height using textbbox for accurate positioning
     bbox_veg_nonveg = veg_nonveg_font.getbbox(veg_nonveg)
     text_height_veg_nonveg = bbox_veg_nonveg[3] - bbox_veg_nonveg[1]
 
     # Adjusted positions for larger image and clearer separation
-    d.text((text_x_start, 1600), veg_nonveg, fill=(0, 0, 0), font=veg_nonveg_font) # Doubled Y position
-    d.text((text_x_start, 1600 + text_height_veg_nonveg + 200), caffeine, fill=(0, 0, 0), font=caffeine_font) # Doubled Y position and increased padding
+    d.text((text_x_start, 6000), veg_nonveg, fill=(0, 0, 0), font=veg_nonveg_font) # Adjusted Y position for taller image
+    d.text((text_x_start, 6000 + text_height_veg_nonveg + 400), caffeine, fill=(0, 0, 0), font=caffeine_font) # Adjusted Y position and increased padding for taller image
     # Removed the "🎫 Food Ticket" text
 
     # Convert to bytes
