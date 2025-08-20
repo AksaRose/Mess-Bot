@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import datetime # Import datetime
 import asyncpg
+import traceback
 import os
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware # Import CORSMiddleware
@@ -15,6 +16,7 @@ app = FastAPI()
 origins = [
     "http://localhost",
     "http://localhost:5173", # React development server
+    "http://127.0.0.1:5173", # Local IP for React development server
 ]
 
 app.add_middleware(
@@ -135,7 +137,7 @@ async def get_meal_counts_tomorrow():
             # 1. Check for today's meal choice (made yesterday)
             meal_choice = await conn.fetchrow(
                 "SELECT veg_or_nonveg, caffeine_choice FROM meal_choices WHERE student_id = $1 AND date = $2",
-                student_id, tomorrow - datetime.timedelta(days=1) # yesterday for tomorrow's meal
+                student_id, tomorrow # tomorrow's meal choice is given today
             )
 
             veg_or_nonveg = None
@@ -180,7 +182,12 @@ async def get_meal_counts_tomorrow():
             "caffeine_students": caffeine_students
         }
 
+    
     except Exception as e:
+        # Log full traceback
+        print("Error in /mealcount/tomorrow:")
+        traceback.print_exc()
+        # Return a readable message
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:

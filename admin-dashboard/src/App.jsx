@@ -13,7 +13,7 @@ function App() {
   const [message, setMessage] = useState('');
   const [mealCounts, setMealCounts] = useState(null);
 
-  const API_BASE_URL = 'http://127.0.0.1:8000'; // Replace with your FastAPI backend URL
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   useEffect(() => {
     if (activeView === 'mealCounts') {
@@ -27,13 +27,27 @@ function App() {
     try {
       const response = await fetch(`${API_BASE_URL}/mealcount/tomorrow`);
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text(); // Read response as text for debugging
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
-      const data = await response.json();
-      setMealCounts(data);
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        console.log('Received meal counts data:', data); // Log the received data
+        if (data) { // Check if data is not null or undefined
+          setMealCounts(data);
+        } else {
+          setMessage('Received empty or invalid data for meal counts.');
+        }
+      } else {
+        const errorText = await response.text(); // Log non-JSON response
+        console.error('Non-JSON response for meal counts:', errorText);
+        throw new TypeError('Received non-JSON response from meal counts API.');
+      }
     } catch (error) {
       console.error('Error fetching meal counts:', error);
-      setMessage('Error fetching meal counts.');
+      setMessage(`Error fetching meal counts: ${error.message || error.toString()}`);
     }
   };
 
