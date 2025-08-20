@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import datetime # Import datetime
 import asyncpg
-import traceback
 import os
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware # Import CORSMiddleware
@@ -62,7 +61,7 @@ async def create_or_update_menu(menu: Menu):
         conn = await get_db_connection()
         await conn.execute(
             """
-            INSERT INTO menu (weekday, breakfast, lunch, snacks, dinner)
+            INSERT INTO menus (weekday, breakfast, lunch, snacks, dinner)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (weekday) DO UPDATE SET
                 breakfast = EXCLUDED.breakfast,
@@ -114,7 +113,7 @@ async def get_meal_counts_tomorrow():
     conn = None
     try:
         conn = await get_db_connection()
-        tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+        tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         tomorrow_weekday = tomorrow.strftime("%A")
 
         # Initialize counts and lists for students
@@ -182,11 +181,7 @@ async def get_meal_counts_tomorrow():
 
     
     except Exception as e:
-        # Log full traceback
-        print("Error in /mealcount/tomorrow:")
-        traceback.print_exc()
-        # Return a readable message
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Exception: {e}")
     finally:
         if conn:
             await conn.close()
