@@ -3,6 +3,7 @@ import datetime
 import os
 import psycopg2
 import httpx
+import pytz # Import pytz
 from dotenv import load_dotenv
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
@@ -229,7 +230,14 @@ async def save_meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     student_id = context.user_data["student_id"]
     veg_or_nonveg = context.user_data["veg_or_nonveg"]
-    tomorrow_date = datetime.date.today() + datetime.timedelta(days=1)
+    # Define the timezone for Asia/Calcutta
+    kolkata_timezone = pytz.timezone('Asia/Kolkata')
+    
+    # Get the current time in the specified timezone
+    today_date_time = datetime.datetime.now(kolkata_timezone)
+    
+    # Calculate tomorrow's date based on the timezone-aware today
+    tomorrow_date = today_date_time.date() + datetime.timedelta(days=1)
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -387,7 +395,14 @@ async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         student_id, student_name, profile_file_id = student_data
 
         # Determine today's meal choice based on hierarchy: meal_choices > weekly_choices > default non-veg
-        today_date = datetime.date.today()
+        # Define the timezone for Asia/Calcutta
+        kolkata_timezone = pytz.timezone('Asia/Kolkata')
+        
+        # Get the current time in the specified timezone
+        today_date_time = datetime.datetime.now(kolkata_timezone)
+        
+        # Extract today's date and weekday
+        today_date = today_date_time.date()
         today_weekday = today_date.strftime("%A")
 
         today_meal_choice = None
