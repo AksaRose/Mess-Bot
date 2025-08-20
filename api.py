@@ -29,6 +29,25 @@ app.add_middleware(
 async def get_db_connection():
     return await asyncpg.connect(os.getenv("DATABASE_URL"))
 
+@app.get("/test-db")
+async def test_db():
+    conn = None
+    try:
+        conn = await asyncpg.connect(
+            host=os.getenv("PGHOST"),
+            user=os.getenv("PGUSER"),
+            password=os.getenv("PGPASSWORD"),
+            database=os.getenv("PGDATABASE"),
+            port=os.getenv("PGPORT")
+        )
+        result = await conn.fetchval("SELECT NOW();")  # simple query
+        return {"status": "connected", "time": str(result)}
+    except Exception as e:
+        return {"status": "failed", "error": str(e)}
+    finally:
+        if conn:
+            await conn.close()
+
 class Menu(BaseModel):
     weekday: str
     breakfast: str = None
