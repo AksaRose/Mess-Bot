@@ -449,18 +449,18 @@ async def generate_ticket_image(
 
     # Create ticket image
     # Increase image size to make default font appear larger
-    img_width, img_height = 1600, 800 # Further increased size
+    img_width, img_height = 2400, 1200 # Increased size to accommodate larger fonts
     img = Image.new("RGB", (img_width, img_height), color="white")
     d = ImageDraw.Draw(img)
 
     font_path = "fonts/Roboto_Condensed-Bold.ttf" # Path to the bundled font
 
     try:
-        name_font = ImageFont.truetype(font_path, 60)
-        date_font = ImageFont.truetype(font_path, 50)
-        veg_nonveg_font = ImageFont.truetype(font_path, 80) # "so so big"
-        caffeine_font = ImageFont.truetype(font_path, 60) # Smaller for caffeine
-        ticket_title_font = ImageFont.truetype(font_path, 55)
+        name_font = ImageFont.truetype(font_path, 90) # Increased font size
+        date_font = ImageFont.truetype(font_path, 75) # Increased font size
+        veg_nonveg_font = ImageFont.truetype(font_path, 120) # Increased font size
+        caffeine_font = ImageFont.truetype(font_path, 90) # Increased font size
+        ticket_title_font = ImageFont.truetype(font_path, 80) # Increased font size
     except IOError:
         logger.error(f"Font file not found at {font_path}. Falling back to default PIL font.")
         name_font = ImageFont.load_default()
@@ -477,7 +477,7 @@ async def generate_ticket_image(
     img.paste(profile_img, (0, 0))
 
     # Calculate text positions for the right side
-    text_x_start = img_width // 2 + 60 # Adjusted for larger image
+    text_x_start = img_width // 2 + 90 # Adjusted for larger image
     
     # Add text details
     d.text((text_x_start, 50), name, fill=(0, 0, 0), font=name_font)
@@ -488,8 +488,8 @@ async def generate_ticket_image(
     text_height_veg_nonveg = bbox_veg_nonveg[3] - bbox_veg_nonveg[1]
 
     # Adjusted positions for larger image and clearer separation
-    d.text((text_x_start, 180), veg_nonveg, fill=(0, 0, 0), font=veg_nonveg_font)
-    d.text((text_x_start, 180 + text_height_veg_nonveg + 20), caffeine, fill=(0, 0, 0), font=caffeine_font) # Increased padding
+    d.text((text_x_start, 270), veg_nonveg, fill=(0, 0, 0), font=veg_nonveg_font) # Adjusted Y position
+    d.text((text_x_start, 270 + text_height_veg_nonveg + 30), caffeine, fill=(0, 0, 0), font=caffeine_font) # Adjusted Y position and increased padding
     # Removed the "🎫 Food Ticket" text
 
     # Convert to bytes
