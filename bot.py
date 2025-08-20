@@ -288,6 +288,29 @@ async def weekly_choice_veg_nonveg(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text("Invalid day. Please choose a day from the keyboard.")
         return WEEKLY_CHOICE_DAY
     context.user_data["weekly_choice_day"] = day
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT breakfast, lunch, snacks, dinner FROM menus WHERE weekday = %s", (day,))
+        menu_data = cur.fetchone()
+
+        if menu_data:
+            menu_text = f"Menu for {day}:\n"
+            menu_text += f"Breakfast: {menu_data[0] or 'N/A'}\n"
+            menu_text += f"Lunch: {menu_data[1] or 'N/A'}\n"
+            menu_text += f"Snacks: {menu_data[2] or 'N/A'}\n"
+            menu_text += f"Dinner: {menu_data[3] or 'N/A'}"
+            await update.message.reply_text(menu_text)
+        else:
+            await update.message.reply_text(f"No menu available for {day}.")
+    except Exception as e:
+        logger.error(f"Error fetching menu for {day} from DB: {e}")
+        await update.message.reply_text("Could not fetch menu for the selected day.")
+    finally:
+        cur.close()
+        conn.close()
+
     reply_keyboard = [["Veg", "Non-Veg"]]
     await update.message.reply_text(
         f"For {day}, Veg or Non-Veg?",
@@ -413,44 +436,48 @@ async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def generate_ticket_image(
     name: str,
     date_str: str,
-    yesterday_choice: str,
+    meal_choice_text: str, # Renamed from yesterday_choice to be more general
     profile_file_id: str,
     context: ContextTypes.DEFAULT_TYPE
 ) -> bytes:
     # Get profile photo
     profile_photo_file = await context.bot.get_file(profile_file_id)
     profile_photo_bytes = await profile_photo_file.download_as_bytearray()
-    profile_img = Image.open(io.BytesIO(profile_photo_bytes)).convert("RGBA")
-
-    # Resize and crop to circle
-    size = (100, 100)
-    profile_img = profile_img.resize(size, Image.Resampling.LANCZOS)
-    mask = Image.new("L", size, 0)
-    draw = ImageDraw.Draw(mask)
-    draw.ellipse((0, 0) + size, fill=255)
-    profile_img.putalpha(mask)
+    profile_img = Image.open(io.BytesIO(profile_photo_bytes)).convert("RGB") # Convert to RGB for simpler handling
 
     # Create ticket image
-    img_width, img_height = 400, 250
+    img_width, img_height = 800, 400 # Larger image size
     img = Image.new("RGB", (img_width, img_height), color="white")
     d = ImageDraw.Draw(img)
 
     try:
         font_path = "/System/Library/Fonts/Supplemental/Arial Unicode.ttf" # Common font on macOS
-        name_font = ImageFont.truetype(font_path, 24)
-        detail_font = ImageFont.truetype(font_path, 16)
+        name_font = ImageFont.truetype(font_path, 40) # Larger font for name
+        date_font = ImageFont.truetype(font_path, 30) # Larger font for date
+        choice_font = ImageFont.truetype(font_path, 35) # Larger font for choice
+        ticket_title_font = ImageFont.truetype(font_path, 45) # Larger font for ticket title
     except IOError:
         name_font = ImageFont.load_default()
-        detail_font = ImageFont.load_default()
+        date_font = ImageFont.load_default()
+        choice_font = ImageFont.load_default()
+        ticket_title_font = ImageFont.load_default()
 
-    # Add profile photo
-    img.paste(profile_img, (20, 20), profile_img)
+    # Resize profile photo to fit one side, maintaining aspect ratio
+    photo_width = img_width // 2
+    photo_height = img_height
+    profile_img.thumbnail((photo_width, photo_height), Image.Resampling.LANCZOS)
 
-    # Add text
-    d.text((140, 30), name, fill=(0, 0, 0), font=name_font)
-    d.text((140, 70), f"Date: {date_str}", fill=(0, 0, 0), font=detail_font)
-    d.text((20, 150), yesterday_choice, fill=(0, 0, 0), font=detail_font)
-    d.text((20, 180), "🎫 Food Ticket", fill=(0, 0, 0), font=name_font)
+    # Paste profile photo on the left side
+    img.paste(profile_img, (0, 0))
+
+    # Calculate text positions for the right side
+    text_x_start = img_width // 2 + 20 # Start text 20px from the middle line
+    
+    # Add text details
+    d.text((text_x_start, 50), name, fill=(0, 0, 0), font=name_font)
+    d.text((text_x_start, 120), f"Date: {date_str}", fill=(0, 0, 0), font=date_font)
+    d.text((text_x_start, 190), meal_choice_text, fill=(0, 0, 0), font=choice_font)
+    d.text((text_x_start, 300), "🎫 Food Ticket", fill=(0, 0, 0), font=ticket_title_font)
 
     # Convert to bytes
     byte_arr = io.BytesIO()
