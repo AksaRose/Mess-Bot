@@ -476,11 +476,11 @@ async def generate_ticket_image(
     # Calculate y-coordinate to center the profile photo vertically
     y_position = (img_height - profile_img.height) // 2
 
-    # Paste profile photo on the left side, centered vertically
-    img.paste(profile_img, (0, y_position))
+    # Paste profile photo on the left side, centered vertically with left padding
+    img.paste(profile_img, (50, y_position)) # Added 50 pixels of left padding
 
     # Calculate text positions for the right side
-    text_x_start = img_width // 2 + 200 # Adjusted x position for larger fonts
+    text_x_start = img_width // 2 + 100 # Adjusted x position for larger fonts
     
     # Add text details
     d.text((text_x_start, 300), name, fill=(0, 0, 0), font=name_font) # Adjusted Y position
