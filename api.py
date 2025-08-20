@@ -85,7 +85,7 @@ async def get_menu(weekday: str):
     try:
         conn = await get_db_connection()
         row = await conn.fetchrow(
-            "SELECT breakfast, lunch, snacks, dinner FROM menu WHERE weekday = $1",
+            "SELECT breakfast, lunch, snacks, dinner FROM menus WHERE weekday = $1",
             weekday
         )
         if row:
