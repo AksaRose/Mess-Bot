@@ -431,7 +431,7 @@ async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         # Generate ticket image
         ticket_image = await generate_ticket_image(
             student_name,
-            datetime.date.today().strftime("%d %b"),
+            today_date.strftime("%d %b"), # Use timezone-aware today_date for formatting
             veg_nonveg,
             caffeine,
             profile_file_id,
@@ -464,7 +464,7 @@ async def generate_ticket_image(
 
     # Create ticket image
     # Increase image size to make default font appear larger
-    img_width, img_height = 2560, 2000 # Set to a Telegram-compatible large size
+    img_width, img_height = 2560, 2000 # Ensure square for better vertical centering
     img = Image.new("RGB", (img_width, img_height), color="white")
     d = ImageDraw.Draw(img)
 
