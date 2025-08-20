@@ -431,7 +431,7 @@ async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         # Generate ticket image
         ticket_image = await generate_ticket_image(
             student_name,
-            today_date.strftime("%d %b"), # Use timezone-aware today_date for formatting
+            today_date.strftime("%b %d"), # Use timezone-aware today_date for formatting
             veg_nonveg,
             caffeine,
             profile_file_id,
