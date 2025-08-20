@@ -268,321 +268,6 @@ async def save_meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     return ConversationHandler.END
 
 
-def main() -> None:
-    """Start the bot."""
-    # Configure httpx client with a longer timeout for all HTTP requests made by the bot
-    # Configure httpx client with a longer timeout for all HTTP requests made by the bot
-    request = HTTPXRequest(connect_timeout=30.0, read_timeout=30.0)
-    application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).request(request).build()
-
-    # Add conversation handler for student registration
-    registration_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_admission_no)],
-            ADMISSION_NO: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_passout_year)],
-            PASSOUT_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_profile_photo)],
-            PROFILE_PHOTO: [MessageHandler(filters.PHOTO, save_student_data)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-    application.add_handler(registration_conv_handler)
-
-    # Add conversation handler for meal choice
-    meal_choice_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("mealchoice", meal_choice)],
-        states={
-            MEAL_CHOICE_VEG_NONVEG: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, meal_choice_caffeine)
-            ],
-            MEAL_CHOICE_CAFFEINE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, save_meal_choice)
-            ],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-    application.add_handler(meal_choice_conv_handler)
-
-    application.add_handler(CommandHandler("ticket", ticket))
-
-
-    # Add conversation handler for weekly choice
-    weekly_choice_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("weeklychoice", weekly_choice_start)],
-        states={
-            WEEKLY_CHOICE_DAY: [
-                MessageHandler(
-                    filters.Regex("^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$"),
-                    weekly_choice_veg_nonveg,
-                )
-            ],
-            WEEKLY_CHOICE_VEG_NONVEG: [
-                MessageHandler(
-                    filters.TEXT & ~filters.COMMAND, # Accept any text for initial processing
-                    weekly_choice_caffeine
-                )
-            ],
-            WEEKLY_CHOICE_CAFFEINE: [
-                MessageHandler(
-                    filters.TEXT & ~filters.COMMAND, # Accept any text for initial processing
-                    weekly_choice_save,
-                )
-            ],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-    application.add_handler(weekly_choice_conv_handler)
-
-    # Add conversation handler for view menu
-    view_menu_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("menu", view_menu_start)],
-        states={
-            VIEW_MENU_DAY: [
-                MessageHandler(
-                    filters.Regex("^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$"),
-                    display_menu_for_day,
-                )
-            ],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-    application.add_handler(view_menu_conv_handler)
- 
-    # For Railway deployment, switch to webhook mode
-    # The URL and port will be provided by Railway
-# Global FastAPI app instance for webhook
-fastapi_app = FastAPI()
-
-def main() -> None:
-    """Start the bot."""
-    # Configure httpx client with a longer timeout for all HTTP requests made by the bot
-    # Configure httpx client with a longer timeout for all HTTP requests made by the bot
-    request = HTTPXRequest(connect_timeout=30.0, read_timeout=30.0)
-    application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).request(request).build()
-
-    # Add conversation handler for student registration
-    registration_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_admission_no)],
-            ADMISSION_NO: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_passout_year)],
-            PASSOUT_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_profile_photo)],
-            PROFILE_PHOTO: [MessageHandler(filters.PHOTO, save_student_data)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-    application.add_handler(registration_conv_handler)
-
-    # Add conversation handler for meal choice
-    meal_choice_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("mealchoice", meal_choice)],
-        states={
-            MEAL_CHOICE_VEG_NONVEG: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, meal_choice_caffeine)
-            ],
-            MEAL_CHOICE_CAFFEINE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, save_meal_choice)
-            ],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-    application.add_handler(meal_choice_conv_handler)
-
-    application.add_handler(CommandHandler("ticket", ticket))
-
-
-    # Add conversation handler for weekly choice
-    weekly_choice_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("weeklychoice", weekly_choice_start)],
-        states={
-            WEEKLY_CHOICE_DAY: [
-                MessageHandler(
-                    filters.Regex("^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$"),
-                    weekly_choice_veg_nonveg,
-                )
-            ],
-            WEEKLY_CHOICE_VEG_NONVEG: [
-                MessageHandler(
-                    filters.TEXT & ~filters.COMMAND, # Accept any text for initial processing
-                    weekly_choice_caffeine
-                )
-            ],
-            WEEKLY_CHOICE_CAFFEINE: [
-                MessageHandler(
-                    filters.TEXT & ~filters.COMMAND, # Accept any text for initial processing
-                    weekly_choice_save,
-                )
-            ],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-    application.add_handler(weekly_choice_conv_handler)
-
-    # Add conversation handler for view menu
-    view_menu_conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("menu", view_menu_start)],
-        states={
-            VIEW_MENU_DAY: [
-                MessageHandler(
-                    filters.Regex("^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$"),
-                    display_menu_for_day,
-                )
-            ],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-    application.add_handler(view_menu_conv_handler)
- 
-    # For Railway deployment, switch to webhook mode
-    # The URL and port will be provided by Railway
-    if os.environ.get("USE_WEBHOOK", "false").lower() == "true":
-        @fastapi_app.post(os.environ.get("WEBHOOK_PATH", "/webhook"))
-        async def telegram_webhook(request: Request):
-            update_json = await request.json()
-            update = Update.de_json(update_json, application.bot)
-            await application.process_update(update)
-            return {"ok": True}
-        
-        # This will run the FastAPI app and block
-        uvicorn.run(
-            fastapi_app,
-            host="0.0.0.0",
-            port=int(os.environ.get("PORT", 8443))
-        )
-    else:
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-
-import io
-import asyncio
-from functools import partial
-from PIL import Image, ImageDraw, ImageFont, ImageOps
-
-def _generate_ticket_image(student_name, ticket_date, veg_or_nonveg, caffeine_choice, profile_photo_bytes=None):
-    """Helper function to generate the ticket image (CPU-bound)."""
-    img_width = 600
-    img_height = 400
-    background_color = (215, 240, 57) # #D7F039
-    text_color = (0, 0, 0) # Black
-
-    img = Image.new('RGB', (img_width, img_height), color = background_color)
-    d = ImageDraw.Draw(img)
-
-    # Use default font for simplicity and cross-platform compatibility
-    font_name_date = ImageFont.load_default(size=40)
-    font_meal = ImageFont.load_default(size=60)
-    font_caffeine = ImageFont.load_default(size=30)
-    
-    # Text positions for left half (0-300px width)
-    x_text_offset = 20
-
-    d.text((x_text_offset, 20), f"{student_name}", fill=text_color, font=font_name_date)
-    d.text((x_text_offset, 80), f"{ticket_date}", fill=text_color, font=font_name_date)
-    d.text((x_text_offset, 180), f"{veg_or_nonveg}", fill=text_color, font=font_meal)
-    d.text((x_text_offset, 280), f"Caffeine: {caffeine_choice}", fill=text_color, font=font_caffeine)
-
-    # Profile photo for the right half (300-600px width)
-    if profile_photo_bytes:
-        try:
-            profile_img = Image.open(io.BytesIO(profile_photo_bytes))
-            
-            # Resize photo to fill the right half (300x400) while maintaining aspect ratio
-            # and then center it in that half
-            photo_target_width = 300
-            photo_target_height = 400
-            profile_img.thumbnail((photo_target_width, photo_target_height), Image.LANCZOS)
-            
-            # Calculate position to center in the right half
-            x_photo = img_width - photo_target_width + (photo_target_width - profile_img.width) // 2
-            y_photo = (img_height - profile_img.height) // 2
-            
-            img.paste(profile_img, (x_photo, y_photo))
-        except Exception as e:
-            logger.error(f"Error processing profile photo in helper: {e}")
-            d.text((img_width - 280, 20), "Photo Error", fill=(255,0,0), font=font_caffeine)
-    else:
-        d.text((img_width - 280, 20), "No profile photo", fill=text_color, font=font_caffeine)
-
-    byte_io = io.BytesIO()
-    img.save(byte_io, format='PNG')
-    byte_io.seek(0)
-    return byte_io
-
-async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Generates and sends a food ticket for today based on yesterday's choice as an image."""
-    user_id = update.effective_user.id
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    profile_photo_bytes = None
-
-    try:
-        cur.execute("SELECT id, name, profile_file_id FROM students WHERE tg_user_id = %s", (user_id,))
-        student = cur.fetchone()
-
-        if not student:
-            await update.message.reply_text(
-                "You need to register first using the /start command."
-            )
-            return
-
-        student_id, student_name, profile_file_id = student
-        yesterday = datetime.date.today() - datetime.timedelta(days=1)
-
-        # 1. Check for today's meal choice (made yesterday)
-        cur.execute(
-            "SELECT veg_or_nonveg, caffeine_choice FROM meal_choices WHERE student_id = %s AND date = %s",
-            (student_id, yesterday),
-        )
-        meal_choice_data = cur.fetchone()
-
-        if meal_choice_data:
-            veg_or_nonveg, caffeine_choice = meal_choice_data
-        else:
-            # 2. Else check weekly choice
-            today_weekday = datetime.date.today().strftime("%A")
-            cur.execute(
-                "SELECT veg_or_nonveg, caffeine_choice FROM weekly_choices WHERE student_id = %s AND weekday = %s",
-                (student_id, today_weekday),
-            )
-            weekly_choice_data = cur.fetchone()
-
-            if weekly_choice_data:
-                veg_or_nonveg, caffeine_choice = weekly_choice_data
-            else:
-                # 3. Else default to Non-Veg
-                veg_or_nonveg = "Non-Veg"
-                caffeine_choice = "None"
-                await update.message.reply_text(
-                    "No meal choice found for yesterday or in your weekly plan. Defaulting to Non-Veg with no caffeine."
-                )
-
-        ticket_date = datetime.date.today().strftime("%d %b %Y")
-
-        # Download profile photo if available
-        if profile_file_id:
-            try:
-                file = await context.bot.get_file(profile_file_id)
-                profile_photo_bytes = await file.download_as_bytearray()
-            except Exception as e:
-                logger.error(f"Error downloading profile photo: {e}")
-                # Don't fail the entire ticket generation if photo download fails
-
-        # Run image generation in a thread pool executor to avoid blocking the event loop
-        # This speeds up perceived performance for concurrent users
-        byte_io = _generate_ticket_image(student_name, ticket_date, veg_or_nonveg, caffeine_choice, profile_photo_bytes)
-
-        await update.message.reply_photo(photo=byte_io, caption="Here is your food ticket!")
-
-    except Exception as e:
-        logger.error(f"Error generating ticket: {e}")
-        await update.message.reply_text(
-            "An error occurred while generating your ticket. Please try again later."
-        )
-    finally:
-        cur.close()
-        conn.close()
-
 async def weekly_choice_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Starts the weekly meal choice conversation."""
     user_id = update.effective_user.id
@@ -657,7 +342,7 @@ async def weekly_choice_veg_nonveg(update: Update, context: ContextTypes.DEFAULT
     )
     context.user_data["first_day_set"] = True # Set flag after the first day's question
     return WEEKLY_CHOICE_VEG_NONVEG
-
+ 
 async def weekly_choice_caffeine(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Stores veg/non-veg choice and asks for caffeine option."""
     message_text = update.message.text
@@ -665,7 +350,7 @@ async def weekly_choice_caffeine(update: Update, context: ContextTypes.DEFAULT_T
         return await done_weekly_choice(update, context)
     if message_text == "Skip this day":
         return await skip_day(update, context)
-
+ 
     context.user_data["current_veg_nonveg"] = message_text
     reply_keyboard = [["Tea", "Coffee"], ["Black Coffee", "Black Tea"], ["None"]]
     await update.message.reply_text(
@@ -675,7 +360,7 @@ async def weekly_choice_caffeine(update: Update, context: ContextTypes.DEFAULT_T
         ),
     )
     return WEEKLY_CHOICE_CAFFEINE
-
+ 
 async def weekly_choice_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Stores caffeine choice and saves the weekly choice for the day to the database."""
     caffeine_choice = update.message.text
@@ -740,7 +425,7 @@ async def skip_day(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     message_text = update.message.text
     if message_text == "Done":
         return await done_weekly_choice(update, context)
-
+ 
     current_weekday = context.user_data["current_weekday"]
     await update.message.reply_text(f"Skipped {current_weekday}.")
     
@@ -811,5 +496,104 @@ async def display_menu_for_day(update: Update, context: ContextTypes.DEFAULT_TYP
     
     return ConversationHandler.END
 
+# Global FastAPI app instance for webhook
+fastapi_app = FastAPI()
+
+# Configure httpx client with a longer timeout for all HTTP requests made by the bot
+request = HTTPXRequest(connect_timeout=30.0, read_timeout=30.0)
+application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).request(request).build()
+
+# Initialize application before processing updates
+import asyncio
+asyncio.get_event_loop().run_until_complete(application.initialize())
+
+# Add conversation handlers to the application
+def add_handlers(app: Application) -> None:
+    # Add conversation handler for student registration
+    registration_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_admission_no)],
+            ADMISSION_NO: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_passout_year)],
+            PASSOUT_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_profile_photo)],
+            PROFILE_PHOTO: [MessageHandler(filters.PHOTO, save_student_data)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    app.add_handler(registration_conv_handler)
+
+    # Add conversation handler for meal choice
+    meal_choice_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("mealchoice", meal_choice)],
+        states={
+            MEAL_CHOICE_VEG_NONVEG: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, meal_choice_caffeine)
+            ],
+            MEAL_CHOICE_CAFFEINE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, save_meal_choice)
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    app.add_handler(meal_choice_conv_handler)
+
+    app.add_handler(CommandHandler("ticket", ticket))
+
+    # Add conversation handler for weekly choice
+    weekly_choice_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("weeklychoice", weekly_choice_start)],
+        states={
+            WEEKLY_CHOICE_DAY: [
+                MessageHandler(
+                    filters.Regex("^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$"),
+                    weekly_choice_veg_nonveg,
+                )
+            ],
+            WEEKLY_CHOICE_VEG_NONVEG: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND, # Accept any text for initial processing
+                    weekly_choice_caffeine
+                )
+            ],
+            WEEKLY_CHOICE_CAFFEINE: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND, # Accept any text for initial processing
+                    weekly_choice_save,
+                )
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    app.add_handler(weekly_choice_conv_handler)
+
+    # Add conversation handler for view menu
+    view_menu_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("menu", view_menu_start)],
+        states={
+            VIEW_MENU_DAY: [
+                MessageHandler(
+                    filters.Regex("^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$"),
+                    display_menu_for_day,
+                )
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    app.add_handler(view_menu_conv_handler)
+
+# Call add_handlers to set up the application with its handlers
+add_handlers(application)
+
+@fastapi_app.post(os.environ.get("WEBHOOK_PATH", "/webhook"))
+async def telegram_webhook(request: Request):
+    update_json = await request.json()
+    update = Update.de_json(update_json, application.bot)
+    await application.process_update(update)
+    return {"ok": True}
+
 if __name__ == "__main__":
-    main()
+    uvicorn.run(
+        fastapi_app,
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 8443))
+    )
