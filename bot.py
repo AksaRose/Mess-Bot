@@ -447,16 +447,26 @@ async def generate_ticket_image(
 
     # Create ticket image
     # Increase image size to make default font appear larger
-    img_width, img_height = 1600, 800 # Doubled size
+    img_width, img_height = 800, 400 # Revert to original size
     img = Image.new("RGB", (img_width, img_height), color="white")
     d = ImageDraw.Draw(img)
 
-    # Use default PIL font (fixed size)
-    # The effective size will be larger due to the larger image dimensions
-    name_font = ImageFont.load_default()
-    date_font = ImageFont.load_default()
-    choice_font = ImageFont.load_default()
-    ticket_title_font = ImageFont.load_default()
+    try:
+        # Try to load Arial.ttf or a similar common font
+        name_font = ImageFont.truetype("arial.ttf", 50)
+        date_font = ImageFont.truetype("arial.ttf", 40)
+        choice_font = ImageFont.truetype("arial.ttf", 60) # Make this "so so big"
+        ticket_title_font = ImageFont.truetype("arial.ttf", 45)
+    except IOError:
+        # Fallback to default font if Arial.ttf is not found
+        logger.warning("Arial.ttf font not found. Falling back to default PIL font. Text size may be smaller than desired.")
+        name_font = ImageFont.load_default()
+        date_font = ImageFont.load_default()
+        choice_font = ImageFont.load_default()
+        ticket_title_font = ImageFont.load_default()
+        # If using default, adjust positions as it's a fixed size
+        # We might need to make the image even larger if load_default() is truly tiny
+        # For now, keep original positions and rely on user feedback
 
     # Resize profile photo to fit one side, maintaining aspect ratio
     photo_width = img_width // 2
@@ -466,14 +476,14 @@ async def generate_ticket_image(
     # Paste profile photo on the left side
     img.paste(profile_img, (0, 0))
 
-    # Calculate text positions for the right side, scaled for larger image
-    text_x_start = img_width // 2 + 40 # Start text 40px from the middle line (scaled from 20px)
+    # Calculate text positions for the right side
+    text_x_start = img_width // 2 + 20 # Original text position
     
-    # Add text details (positions scaled accordingly)
-    d.text((text_x_start, 100), name, fill=(0, 0, 0), font=name_font)
-    d.text((text_x_start, 240), f"Date: {date_str}", fill=(0, 0, 0), font=date_font)
-    d.text((text_x_start, 380), meal_choice_text, fill=(0, 0, 0), font=choice_font)
-    d.text((text_x_start, 600), "🎫 Food Ticket", fill=(0, 0, 0), font=ticket_title_font)
+    # Add text details
+    d.text((text_x_start, 50), name, fill=(0, 0, 0), font=name_font)
+    d.text((text_x_start, 120), f"Date: {date_str}", fill=(0, 0, 0), font=date_font)
+    d.text((text_x_start, 190), meal_choice_text, fill=(0, 0, 0), font=choice_font)
+    d.text((text_x_start, 300), "🎫 Food Ticket", fill=(0, 0, 0), font=ticket_title_font)
 
     # Convert to bytes
     byte_arr = io.BytesIO()
