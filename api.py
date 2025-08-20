@@ -27,12 +27,7 @@ app.add_middleware(
 
 # Database connection function
 async def get_db_connection():
-    return await asyncpg.connect(
-        host=os.getenv("DB_HOST"),
-        database=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD")
-    )
+    return await asyncpg.connect(os.getenv("DATABASE_URL"))
 
 class Menu(BaseModel):
     weekday: str
