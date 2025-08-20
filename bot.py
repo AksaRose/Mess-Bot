@@ -14,6 +14,8 @@ from telegram.ext import (
     filters,
 )
 from telegram.request import HTTPXRequest # Import HTTPXRequest
+from fastapi import FastAPI, Request # Import FastAPI and Request
+import uvicorn # Import uvicorn for running FastAPI app
 
 load_dotenv() # Load environment variables from .env file
 
@@ -169,6 +171,8 @@ async def meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     # Fetch and display tomorrow's menu
     tomorrow_weekday = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%A")
     menu_api_url = os.getenv("MENU_API_URL", "http://127.0.0.1:8000")
+    print(f"DEBUG: MENU_API_URL in meal_choice: {menu_api_url}") # Debug print
+    logger.info(f"Using MENU_API_URL: {menu_api_url}")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{menu_api_url}/menu/{tomorrow_weekday}")
@@ -346,12 +350,104 @@ def main() -> None:
  
     # For Railway deployment, switch to webhook mode
     # The URL and port will be provided by Railway
+# Global FastAPI app instance for webhook
+fastapi_app = FastAPI()
+
+def main() -> None:
+    """Start the bot."""
+    # Configure httpx client with a longer timeout for all HTTP requests made by the bot
+    # Configure httpx client with a longer timeout for all HTTP requests made by the bot
+    request = HTTPXRequest(connect_timeout=30.0, read_timeout=30.0)
+    application = Application.builder().token(os.getenv("TELEGRAM_BOT_TOKEN")).request(request).build()
+
+    # Add conversation handler for student registration
+    registration_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_admission_no)],
+            ADMISSION_NO: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_passout_year)],
+            PASSOUT_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_profile_photo)],
+            PROFILE_PHOTO: [MessageHandler(filters.PHOTO, save_student_data)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    application.add_handler(registration_conv_handler)
+
+    # Add conversation handler for meal choice
+    meal_choice_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("mealchoice", meal_choice)],
+        states={
+            MEAL_CHOICE_VEG_NONVEG: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, meal_choice_caffeine)
+            ],
+            MEAL_CHOICE_CAFFEINE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, save_meal_choice)
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    application.add_handler(meal_choice_conv_handler)
+
+    application.add_handler(CommandHandler("ticket", ticket))
+
+
+    # Add conversation handler for weekly choice
+    weekly_choice_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("weeklychoice", weekly_choice_start)],
+        states={
+            WEEKLY_CHOICE_DAY: [
+                MessageHandler(
+                    filters.Regex("^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$"),
+                    weekly_choice_veg_nonveg,
+                )
+            ],
+            WEEKLY_CHOICE_VEG_NONVEG: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND, # Accept any text for initial processing
+                    weekly_choice_caffeine
+                )
+            ],
+            WEEKLY_CHOICE_CAFFEINE: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND, # Accept any text for initial processing
+                    weekly_choice_save,
+                )
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    application.add_handler(weekly_choice_conv_handler)
+
+    # Add conversation handler for view menu
+    view_menu_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("menu", view_menu_start)],
+        states={
+            VIEW_MENU_DAY: [
+                MessageHandler(
+                    filters.Regex("^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$"),
+                    display_menu_for_day,
+                )
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    application.add_handler(view_menu_conv_handler)
+ 
+    # For Railway deployment, switch to webhook mode
+    # The URL and port will be provided by Railway
     if os.environ.get("USE_WEBHOOK", "false").lower() == "true":
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=int(os.environ.get("PORT", 8443)),
-            url_path=os.environ.get("WEBHOOK_PATH", ""),
-            webhook_url=os.environ.get("WEBHOOK_URL", "") + os.environ.get("WEBHOOK_PATH", ""),
+        @fastapi_app.post(os.environ.get("WEBHOOK_PATH", "/webhook"))
+        async def telegram_webhook(request: Request):
+            update_json = await request.json()
+            update = Update.de_json(update_json, application.bot)
+            await application.process_update(update)
+            return {"ok": True}
+        
+        # This will run the FastAPI app and block
+        uvicorn.run(
+            fastapi_app,
+            host="0.0.0.0",
+            port=int(os.environ.get("PORT", 8443))
         )
     else:
         application.run_polling(allowed_updates=Update.ALL_TYPES)
@@ -527,6 +623,8 @@ async def weekly_choice_veg_nonveg(update: Update, context: ContextTypes.DEFAULT
 
     # Fetch and display menu for the selected day
     menu_api_url = os.getenv("MENU_API_URL", "http://127.0.0.1:8000")
+    print(f"DEBUG: MENU_API_URL in weekly_choice_veg_nonveg: {menu_api_url}") # Debug print
+    logger.info(f"Using MENU_API_URL: {menu_api_url}")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{menu_api_url}/menu/{current_weekday}")
@@ -689,6 +787,8 @@ async def display_menu_for_day(update: Update, context: ContextTypes.DEFAULT_TYP
     selected_weekday = update.message.text
     
     menu_api_url = os.getenv("MENU_API_URL", "http://127.0.0.1:8000")
+    print(f"DEBUG: MENU_API_URL in display_menu_for_day: {menu_api_url}") # Debug print
+    logger.info(f"Using MENU_API_URL: {menu_api_url}")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{menu_api_url}/menu/{selected_weekday}")
