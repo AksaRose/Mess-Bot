@@ -449,7 +449,7 @@ async def generate_ticket_image(
 
     # Create ticket image
     # Increase image size to make default font appear larger
-    img_width, img_height = 1200, 600 # Further increased size
+    img_width, img_height = 1600, 800 # Further increased size
     img = Image.new("RGB", (img_width, img_height), color="white")
     d = ImageDraw.Draw(img)
 
