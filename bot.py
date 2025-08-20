@@ -50,13 +50,7 @@ logger = logging.getLogger(__name__)
 
 # Database connection function
 def get_db_connection():
-    return psycopg2.connect(
-        host=os.getenv("PGHOST"),
-        dbname=os.getenv("PGDATABASE"),
-        user=os.getenv("PGUSER"),
-        password=os.getenv("PGPASSWORD"),
-        port=os.getenv("PGPORT")
-    )
+    return psycopg2.connect(os.getenv("DATABASE_URL"))
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Send a message when the command /start is issued."""
