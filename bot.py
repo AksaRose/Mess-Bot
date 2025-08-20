@@ -36,19 +36,22 @@ logger = logging.getLogger(__name__)
     ADMISSION_NO,
     PASSOUT_YEAR,
     PROFILE_PHOTO,
+) = range(4)
+
+(
     MEAL_CHOICE_VEG_NONVEG,
     MEAL_CHOICE_CAFFEINE,
-) = range(6)
+) = range(4, 6)
 
-# Weekly choice states
 (
     WEEKLY_CHOICE_DAY,
     WEEKLY_CHOICE_VEG_NONVEG,
     WEEKLY_CHOICE_CAFFEINE,
 ) = range(6, 9)
 
-# View menu states
 (VIEW_MENU_DAY,) = range(9, 10)
+
+(POST_REGISTRATION_CHOICE,) = range(10, 11)
 
 # Database connection
 def get_db_connection():
@@ -118,22 +121,40 @@ async def save_student_data(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             (name, admission_no, passout_year, photo_file_id, user_id),
         )
         conn.commit()
-        await update.message.reply_text(f"Thank you, {name}! You are now registered. Welcome to Hostel Bot!")
+        reply_keyboard = [["Today's Food Ticket", "Tomorrow's Meal Choice"]]
+        await update.message.reply_text(
+            f"Thank you, {name}! You are now registered. Welcome to Hostel Bot!\n"
+            "Do you want today’s food ticket or give meal choice for tomorrow?",
+            reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+        )
+        return POST_REGISTRATION_CHOICE
     except psycopg2.errors.UniqueViolation:
         conn.rollback()
         await update.message.reply_text("You are already registered. Contact support if this is an error.")
+        return ConversationHandler.END # End conversation if already registered
     except Exception as e:
         conn.rollback()
         logger.error(f"Error saving student data: {e}")
         await update.message.reply_text("An error occurred during registration. Please try again later.")
+        return ConversationHandler.END # End conversation on error
     finally:
         cur.close()
         conn.close()
-    return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("Registration cancelled. Use /start to begin again.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
+
+# --- Post-registration choice handler --- #
+async def handle_post_registration_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    choice = update.message.text
+    if choice == "Today's Food Ticket":
+        return await ticket(update, context)
+    elif choice == "Tomorrow's Meal Choice":
+        return await meal_choice(update, context)
+    else:
+        await update.message.reply_text("Invalid choice. Please select 'Today's Food Ticket' or 'Tomorrow's Meal Choice'.")
+        return POST_REGISTRATION_CHOICE
 
 # --- Meal choice handlers --- #
 
@@ -151,22 +172,33 @@ async def meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         return ConversationHandler.END
 
     context.user_data["student_id"] = student_id[0]
-    tomorrow_weekday = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%A")
-    menu_api_url = os.getenv("MENU_API_URL", "http://127.0.0.1:8000")
+    tomorrow_date = datetime.date.today() + datetime.timedelta(days=1)
+    tomorrow_weekday = tomorrow_date.strftime("%A")
+    
+    conn.close() # Close connection used for student_id, open new for menu query
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{menu_api_url}/menu/{tomorrow_weekday}")
-            response.raise_for_status()
-            menu_data = response.json()
+        cur.execute("SELECT breakfast, lunch, snacks, dinner FROM menus WHERE weekday = %s", (tomorrow_weekday,))
+        menu_data = cur.fetchone()
+
+        if menu_data:
             menu_text = f"Tomorrow's Menu ({tomorrow_weekday}):\n"
-            menu_text += f"Breakfast: {menu_data.get('breakfast', 'N/A')}\n"
-            menu_text += f"Lunch: {menu_data.get('lunch', 'N/A')}\n"
-            menu_text += f"Snacks: {menu_data.get('snacks', 'N/A')}\n"
-            menu_text += f"Dinner: {menu_data.get('dinner', 'N/A')}"
+            menu_text += f"Breakfast: {menu_data[0] or 'N/A'}\n"
+            menu_text += f"Lunch: {menu_data[1] or 'N/A'}\n"
+            menu_text += f"Snacks: {menu_data[2] or 'N/A'}\n"
+            menu_text += f"Dinner: {menu_data[3] or 'N/A'}"
             await update.message.reply_text(menu_text)
+        else:
+            await update.message.reply_text(f"No menu available for tomorrow ({tomorrow_weekday}).")
     except Exception as e:
-        logger.error(f"Error fetching tomorrow's menu: {e}")
+        logger.error(f"Error fetching tomorrow's menu from DB: {e}")
         await update.message.reply_text("Could not fetch tomorrow's menu.")
+    finally:
+        cur.close()
+        conn.close()
 
     reply_keyboard = [["Veg", "Non-Veg"]]
     await update.message.reply_text(
@@ -224,11 +256,105 @@ async def save_meal_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     return ConversationHandler.END
 
 # --- Ticket handler --- #
-async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    await update.message.reply_text(
-        f"🎫 Ticket for {user.first_name} ({user.id})\nDate: {datetime.date.today()}"
-    )
+async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_id = update.effective_user.id
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Fetch student details
+        cur.execute(
+            "SELECT id, name, profile_file_id FROM students WHERE tg_user_id = %s",
+            (user_id,)
+        )
+        student_data = cur.fetchone()
+
+        if not student_data:
+            await update.message.reply_text("You need to register first using /start.")
+            return ConversationHandler.END
+
+        student_id, student_name, profile_file_id = student_data
+
+        # Fetch yesterday's meal choice
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        cur.execute(
+            "SELECT veg_or_nonveg, caffeine_choice FROM meal_choices WHERE student_id = %s AND date = %s",
+            (student_id, yesterday)
+        )
+        yesterday_choice = cur.fetchone()
+
+        choice_text = "No choice made yesterday."
+        if yesterday_choice:
+            veg_nonveg = yesterday_choice[0]
+            caffeine = yesterday_choice[1]
+            choice_text = f"Yesterday's Choice: {veg_nonveg}, {caffeine}"
+
+        # Generate ticket image
+        ticket_image = await generate_ticket_image(
+            student_name,
+            str(datetime.date.today()),
+            choice_text,
+            profile_file_id,
+            context
+        )
+        
+        # Send the generated image
+        await update.message.reply_photo(photo=ticket_image)
+
+    except Exception as e:
+        logger.error(f"Error generating or sending ticket: {e}")
+        await update.message.reply_text("An error occurred while generating your food ticket. Please try again later.")
+    finally:
+        cur.close()
+        conn.close()
+    return ConversationHandler.END
+
+async def generate_ticket_image(
+    name: str,
+    date_str: str,
+    yesterday_choice: str,
+    profile_file_id: str,
+    context: ContextTypes.DEFAULT_TYPE
+) -> bytes:
+    # Get profile photo
+    profile_photo_file = await context.bot.get_file(profile_file_id)
+    profile_photo_bytes = await profile_photo_file.download_as_bytearray()
+    profile_img = Image.open(io.BytesIO(profile_photo_bytes)).convert("RGBA")
+
+    # Resize and crop to circle
+    size = (100, 100)
+    profile_img = profile_img.resize(size, Image.Resampling.LANCZOS)
+    mask = Image.new("L", size, 0)
+    draw = ImageDraw.Draw(mask)
+    draw.ellipse((0, 0) + size, fill=255)
+    profile_img.putalpha(mask)
+
+    # Create ticket image
+    img_width, img_height = 400, 250
+    img = Image.new("RGB", (img_width, img_height), color="white")
+    d = ImageDraw.Draw(img)
+
+    try:
+        font_path = "/System/Library/Fonts/Supplemental/Arial Unicode.ttf" # Common font on macOS
+        name_font = ImageFont.truetype(font_path, 24)
+        detail_font = ImageFont.truetype(font_path, 16)
+    except IOError:
+        name_font = ImageFont.load_default()
+        detail_font = ImageFont.load_default()
+
+    # Add profile photo
+    img.paste(profile_img, (20, 20), profile_img)
+
+    # Add text
+    d.text((140, 30), name, fill=(0, 0, 0), font=name_font)
+    d.text((140, 70), f"Date: {date_str}", fill=(0, 0, 0), font=detail_font)
+    d.text((20, 150), yesterday_choice, fill=(0, 0, 0), font=detail_font)
+    d.text((20, 180), "🎫 Food Ticket", fill=(0, 0, 0), font=name_font)
+
+    # Convert to bytes
+    byte_arr = io.BytesIO()
+    img.save(byte_arr, format="PNG")
+    return byte_arr.getvalue()
 
 # --- Weekly choice handlers and view menu handlers omitted for brevity, include as previously written --- #
 
@@ -247,6 +373,7 @@ def add_handlers(app: Application) -> None:
             ADMISSION_NO: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_passout_year)],
             PASSOUT_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_profile_photo)],
             PROFILE_PHOTO: [MessageHandler(filters.PHOTO, save_student_data)],
+            POST_REGISTRATION_CHOICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_post_registration_choice)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
