@@ -386,37 +386,37 @@ async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
         student_id, student_name, profile_file_id = student_data
 
-        # Determine tomorrow's meal choice based on hierarchy: meal_choices > weekly_choices > default non-veg
-        tomorrow_date = datetime.date.today() + datetime.timedelta(days=1)
-        tomorrow_weekday = tomorrow_date.strftime("%A")
+        # Determine today's meal choice based on hierarchy: meal_choices > weekly_choices > default non-veg
+        today_date = datetime.date.today()
+        today_weekday = today_date.strftime("%A")
 
-        tomorrow_meal_choice = None
+        today_meal_choice = None
         
-        # 1. Check meal_choices table for tomorrow's explicit choice
+        # 1. Check meal_choices table for today's explicit choice
         cur.execute(
             "SELECT veg_or_nonveg, caffeine_choice FROM meal_choices WHERE student_id = %s AND date = %s",
-            (student_id, tomorrow_date)
+            (student_id, today_date)
         )
-        tomorrow_meal_choice = cur.fetchone()
+        today_meal_choice = cur.fetchone()
 
-        if not tomorrow_meal_choice:
-            # 2. Else, check weekly_choices for tomorrow's preference
+        if not today_meal_choice:
+            # 2. Else, check weekly_choices for today's preference
             cur.execute(
                 "SELECT veg_or_nonveg, caffeine_choice FROM weekly_choices WHERE student_id = %s AND weekday = %s",
-                (student_id, tomorrow_weekday)
+                (student_id, today_weekday)
             )
-            tomorrow_meal_choice = cur.fetchone()
+            today_meal_choice = cur.fetchone()
 
-        choice_text = "Tomorrow's Choice: Non-Veg (Default), None" # Default
-        if tomorrow_meal_choice:
-            veg_nonveg = tomorrow_meal_choice[0]
-            caffeine = tomorrow_meal_choice[1]
-            choice_text = f"Tomorrow's Choice: {veg_nonveg}, {caffeine}"
+        choice_text = "Today's Choice: Non-Veg (Default), None" # Default
+        if today_meal_choice:
+            veg_nonveg = today_meal_choice[0]
+            caffeine = today_meal_choice[1]
+            choice_text = f"{veg_nonveg}, {caffeine}"
 
         # Generate ticket image
         ticket_image = await generate_ticket_image(
             student_name,
-            str(datetime.date.today()),
+            datetime.date.today().strftime("%d %b"),
             choice_text,
             profile_file_id,
             context
@@ -452,9 +452,9 @@ async def generate_ticket_image(
 
     try:
         font_path = "/System/Library/Fonts/Supplemental/Arial Unicode.ttf" # Common font on macOS
-        name_font = ImageFont.truetype(font_path, 40) # Larger font for name
-        date_font = ImageFont.truetype(font_path, 30) # Larger font for date
-        choice_font = ImageFont.truetype(font_path, 35) # Larger font for choice
+        name_font = ImageFont.truetype(font_path, 50) # Larger font for name
+        date_font = ImageFont.truetype(font_path, 50) # Larger font for date
+        choice_font = ImageFont.truetype(font_path, 70) # Much larger font for choice
         ticket_title_font = ImageFont.truetype(font_path, 45) # Larger font for ticket title
     except IOError:
         name_font = ImageFont.load_default()
