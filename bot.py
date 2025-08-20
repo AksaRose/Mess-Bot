@@ -451,22 +451,19 @@ async def generate_ticket_image(
     img = Image.new("RGB", (img_width, img_height), color="white")
     d = ImageDraw.Draw(img)
 
+    font_path = "fonts/Roboto_Condensed-Bold.ttf" # Path to the bundled font
+
     try:
-        # Try to load Arial.ttf or a similar common font
-        name_font = ImageFont.truetype("arial.ttf", 60)
-        date_font = ImageFont.truetype("arial.ttf", 50)
-        choice_font = ImageFont.truetype("arial.ttf", 80) # Even bigger
-        ticket_title_font = ImageFont.truetype("arial.ttf", 55)
+        name_font = ImageFont.truetype(font_path, 60)
+        date_font = ImageFont.truetype(font_path, 50)
+        choice_font = ImageFont.truetype(font_path, 80) # "so so big"
+        ticket_title_font = ImageFont.truetype(font_path, 55)
     except IOError:
-        # Fallback to default font if Arial.ttf is not found
-        logger.warning("Arial.ttf font not found. Falling back to default PIL font. Text size may be smaller than desired.")
+        logger.error(f"Font file not found at {font_path}. Falling back to default PIL font.")
         name_font = ImageFont.load_default()
         date_font = ImageFont.load_default()
         choice_font = ImageFont.load_default()
         ticket_title_font = ImageFont.load_default()
-        # If using default, adjust positions as it's a fixed size
-        # We might need to make the image even larger if load_default() is truly tiny
-        # For now, keep original positions and rely on user feedback
 
     # Resize profile photo to fit one side, maintaining aspect ratio
     photo_width = img_width // 2
