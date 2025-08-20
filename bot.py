@@ -484,7 +484,17 @@ async def generate_ticket_image(
     d.text((text_x_start, 120), f"Date: {date_str}", fill=(0, 0, 0), font=date_font)
     # Adjust position for multi-line meal choice text
     d.text((text_x_start, 190), veg_nonveg, fill=(0, 0, 0), font=veg_nonveg_font)
-    d.text((text_x_start, 190 + veg_nonveg_font.getsize(veg_nonveg)[1] + 10), caffeine, fill=(0, 0, 0), font=caffeine_font) # 10px padding
+    # Calculate text height using textbbox for accurate positioning
+    # For veg_nonveg
+    bbox_veg_nonveg = veg_nonveg_font.getbbox(veg_nonveg)
+    text_height_veg_nonveg = bbox_veg_nonveg[3] - bbox_veg_nonveg[1]
+
+    # For caffeine
+    bbox_caffeine = caffeine_font.getbbox(caffeine)
+    text_height_caffeine = bbox_caffeine[3] - bbox_caffeine[1]
+
+    d.text((text_x_start, 190), veg_nonveg, fill=(0, 0, 0), font=veg_nonveg_font)
+    d.text((text_x_start, 190 + text_height_veg_nonveg + 10), caffeine, fill=(0, 0, 0), font=caffeine_font) # 10px padding
     d.text((text_x_start, 300), "🎫 Food Ticket", fill=(0, 0, 0), font=ticket_title_font)
 
     # Convert to bytes
