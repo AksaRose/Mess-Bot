@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import datetime # Import datetime
 import asyncpg
+import traceback
 import os
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware # Import CORSMiddleware
@@ -113,7 +114,7 @@ async def get_meal_counts_tomorrow():
     conn = None
     try:
         conn = await get_db_connection()
-        tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow = datetime.date.today() + datetime.timedelta(days=1)
         tomorrow_weekday = tomorrow.strftime("%A")
 
         # Initialize counts and lists for students
@@ -141,8 +142,8 @@ async def get_meal_counts_tomorrow():
             caffeine_choice = None
 
             if meal_choice:
-                veg_or_nonveg = meal_choice["veg_or_nonveg"]
-                caffeine_choice = meal_choice["caffeine_choice"]
+                veg_or_nonveg = meal_choice["veg_or_nonveg"] if meal_choice["veg_or_nonveg"] is not None else "Non-Veg"
+                caffeine_choice = meal_choice["caffeine_choice"] if meal_choice["caffeine_choice"] is not None else "None"
             else:
                 # 2. Else check weekly choice
                 weekly_choice = await conn.fetchrow(
@@ -150,8 +151,8 @@ async def get_meal_counts_tomorrow():
                     student_id, tomorrow_weekday
                 )
                 if weekly_choice:
-                    veg_or_nonveg = weekly_choice["veg_or_nonveg"]
-                    caffeine_choice = weekly_choice["caffeine_choice"]
+                    veg_or_nonveg = weekly_choice["veg_or_nonveg"] if weekly_choice["veg_or_nonveg"] is not None else "Non-Veg"
+                    caffeine_choice = weekly_choice["caffeine_choice"] if weekly_choice["caffeine_choice"] is not None else "None"
                 else:
                     # 3. Else default to Non-Veg
                     veg_or_nonveg = "Non-Veg"
@@ -179,9 +180,10 @@ async def get_meal_counts_tomorrow():
             "caffeine_students": caffeine_students
         }
 
-    
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Exception: {e}")
+        full_traceback = traceback.format_exc()
+        print(f"Caught exception in /mealcount/tomorrow: {e}\n{full_traceback}")
+        raise HTTPException(status_code=500, detail=f"Exception: {str(e)}\nTraceback:\n{full_traceback}")
     finally:
         if conn:
             await conn.close()
