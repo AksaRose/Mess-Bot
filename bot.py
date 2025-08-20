@@ -411,7 +411,7 @@ async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         if today_meal_choice:
             veg_nonveg = today_meal_choice[0]
             caffeine = today_meal_choice[1]
-            choice_text = f"{veg_nonveg}, {caffeine}"
+            choice_text = f"{veg_nonveg}\n{caffeine}"
 
         # Generate ticket image
         ticket_image = await generate_ticket_image(
@@ -456,8 +456,8 @@ async def generate_ticket_image(
     try:
         name_font = ImageFont.truetype(font_path, 60)
         date_font = ImageFont.truetype(font_path, 50)
-        choice_font = ImageFont.truetype(font_path, 80) # "so so big"
-        ticket_title_font = ImageFont.truetype(font_path, 55)
+        veg_nonveg_font = ImageFont.truetype(font_path, 80) # "so so big"
+        caffeine_font = ImageFont.truetype(font_path, 60) # Smaller for caffeine
     except IOError:
         logger.error(f"Font file not found at {font_path}. Falling back to default PIL font.")
         name_font = ImageFont.load_default()
@@ -479,7 +479,9 @@ async def generate_ticket_image(
     # Add text details
     d.text((text_x_start, 50), name, fill=(0, 0, 0), font=name_font)
     d.text((text_x_start, 120), f"Date: {date_str}", fill=(0, 0, 0), font=date_font)
-    d.text((text_x_start, 190), meal_choice_text, fill=(0, 0, 0), font=choice_font)
+    # Adjust position for multi-line meal choice text
+    d.text((text_x_start, 190), veg_nonveg, fill=(0, 0, 0), font=veg_nonveg_font)
+    d.text((text_x_start, 190 + veg_nonveg_font.getsize(veg_nonveg)[1] + 10), caffeine, fill=(0, 0, 0), font=caffeine_font) # 10px padding
     d.text((text_x_start, 300), "🎫 Food Ticket", fill=(0, 0, 0), font=ticket_title_font)
 
     # Convert to bytes
