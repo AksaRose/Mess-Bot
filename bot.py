@@ -306,6 +306,7 @@ def main() -> None:
 
     application.add_handler(CommandHandler("ticket", ticket))
 
+
     # Add conversation handler for weekly choice
     weekly_choice_conv_handler = ConversationHandler(
         entry_points=[CommandHandler("weeklychoice", weekly_choice_start)],
@@ -350,12 +351,15 @@ def main() -> None:
  
     # For Railway deployment, switch to webhook mode
     # The URL and port will be provided by Railway
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", "8080")),
-        url_path=os.environ.get("WEBHOOK_PATH", ""),
-        webhook_url=os.environ.get("WEBHOOK_URL", "") + os.environ.get("WEBHOOK_PATH", "")
-    )
+    if os.environ.get("USE_WEBHOOK", "false").lower() == "true":
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=int(os.environ.get("PORT", 8443)),
+            url_path=os.environ.get("WEBHOOK_PATH", ""),
+            webhook_url=os.environ.get("WEBHOOK_URL", "") + os.environ.get("WEBHOOK_PATH", ""),
+        )
+    else:
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 import io
