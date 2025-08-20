@@ -449,7 +449,7 @@ async def generate_ticket_image(
 
     # Create ticket image
     # Increase image size to make default font appear larger
-    img_width, img_height = 800, 400 # Revert to original size
+    img_width, img_height = 1200, 600 # Further increased size
     img = Image.new("RGB", (img_width, img_height), color="white")
     d = ImageDraw.Draw(img)
 
@@ -477,25 +477,20 @@ async def generate_ticket_image(
     img.paste(profile_img, (0, 0))
 
     # Calculate text positions for the right side
-    text_x_start = img_width // 2 + 20 # Original text position
+    text_x_start = img_width // 2 + 60 # Adjusted for larger image
     
     # Add text details
     d.text((text_x_start, 50), name, fill=(0, 0, 0), font=name_font)
     d.text((text_x_start, 120), f"Date: {date_str}", fill=(0, 0, 0), font=date_font)
     # Adjust position for multi-line meal choice text
-    d.text((text_x_start, 190), veg_nonveg, fill=(0, 0, 0), font=veg_nonveg_font)
     # Calculate text height using textbbox for accurate positioning
-    # For veg_nonveg
     bbox_veg_nonveg = veg_nonveg_font.getbbox(veg_nonveg)
     text_height_veg_nonveg = bbox_veg_nonveg[3] - bbox_veg_nonveg[1]
 
-    # For caffeine
-    bbox_caffeine = caffeine_font.getbbox(caffeine)
-    text_height_caffeine = bbox_caffeine[3] - bbox_caffeine[1]
-
-    d.text((text_x_start, 190), veg_nonveg, fill=(0, 0, 0), font=veg_nonveg_font)
-    d.text((text_x_start, 190 + text_height_veg_nonveg + 10), caffeine, fill=(0, 0, 0), font=caffeine_font) # 10px padding
-    d.text((text_x_start, 300), "🎫 Food Ticket", fill=(0, 0, 0), font=ticket_title_font)
+    # Adjusted positions for larger image and clearer separation
+    d.text((text_x_start, 180), veg_nonveg, fill=(0, 0, 0), font=veg_nonveg_font)
+    d.text((text_x_start, 180 + text_height_veg_nonveg + 20), caffeine, fill=(0, 0, 0), font=caffeine_font) # Increased padding
+    # Removed the "🎫 Food Ticket" text
 
     # Convert to bytes
     byte_arr = io.BytesIO()
