@@ -407,17 +407,18 @@ async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             )
             today_meal_choice = cur.fetchone()
 
-        choice_text = "Today's Choice: Non-Veg (Default), None" # Default
+        veg_nonveg = "Non-Veg (Default)"
+        caffeine = "None"
         if today_meal_choice:
-            veg_nonveg = today_meal_choice[0]
-            caffeine = today_meal_choice[1]
-            choice_text = f"{veg_nonveg}\n{caffeine}"
+            veg_nonveg = today_meal_choice[0] if today_meal_choice[0] is not None else "Non-Veg (Default)"
+            caffeine = today_meal_choice[1] if today_meal_choice[1] is not None else "None"
 
         # Generate ticket image
         ticket_image = await generate_ticket_image(
             student_name,
             datetime.date.today().strftime("%d %b"),
-            choice_text,
+            veg_nonveg,
+            caffeine,
             profile_file_id,
             context
         )
@@ -436,7 +437,8 @@ async def ticket(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def generate_ticket_image(
     name: str,
     date_str: str,
-    meal_choice_text: str, # Renamed from yesterday_choice to be more general
+    veg_nonveg: str,
+    caffeine: str,
     profile_file_id: str,
     context: ContextTypes.DEFAULT_TYPE
 ) -> bytes:
