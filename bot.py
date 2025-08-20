@@ -499,7 +499,7 @@ async def generate_ticket_image(
     
     # Add text details
     d.text((text_x_start, 400), name, fill=(0, 0, 0), font=name_font) # Adjusted Y position
-    d.text((text_x_start, 600), f"Date: {date_str}", fill=(0, 0, 0), font=date_font) # Adjusted Y position
+    d.text((text_x_start, 600), f" {date_str}", fill=(0, 0, 0), font=date_font) # Adjusted Y position
     # Adjust position for multi-line meal choice text
     # Calculate text height using textbbox for accurate positioning
     bbox_veg_nonveg = veg_nonveg_font.getbbox(veg_nonveg)
