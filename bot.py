@@ -50,9 +50,10 @@ logger = logging.getLogger(__name__)
     WEEKLY_CHOICE_CAFFEINE,
 ) = range(6, 9)
 
-(VIEW_MENU_DAY,) = range(9, 10)
+(VIEW_MENU_DAY,) = range(9, 10) # Existing state, no change needed here.
+(MENU_CHOICE_DAY,) = range(10, 11) # New state for menu command
 
-(POST_REGISTRATION_CHOICE,) = range(10, 11)
+(POST_REGISTRATION_CHOICE,) = range(11, 12) # Adjusted range
 
 # Database connection
 def get_db_connection():
@@ -515,7 +516,48 @@ async def generate_ticket_image(
     img.save(byte_arr, format="PNG")
     return byte_arr.getvalue()
 
-# --- Weekly choice handlers and view menu handlers omitted for brevity, include as previously written --- #
+# --- Menu command handlers --- #
+async def menu_command_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    reply_keyboard = [
+        ["Monday", "Tuesday", "Wednesday"],
+        ["Thursday", "Friday", "Saturday"],
+        ["Sunday"]
+    ]
+    await update.message.reply_text(
+        "For which day do you want to view the menu?",
+        reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True, input_field_placeholder="Select Day")
+    )
+    return MENU_CHOICE_DAY
+
+async def fetch_and_display_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    day = update.message.text
+    valid_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    if day not in valid_days:
+        await update.message.reply_text("Invalid day. Please choose a day from the keyboard.")
+        return MENU_CHOICE_DAY
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT breakfast, lunch, snacks, dinner FROM menus WHERE weekday = %s", (day,))
+        menu_data = cur.fetchone()
+
+        if menu_data:
+            menu_text = f"Menu for {day}:\n"
+            menu_text += f"Breakfast: {menu_data[0] or 'N/A'}\n"
+            menu_text += f"Lunch: {menu_data[1] or 'N/A'}\n"
+            menu_text += f"Snacks: {menu_data[2] or 'N/A'}\n"
+            menu_text += f"Dinner: {menu_data[3] or 'N/A'}"
+            await update.message.reply_text(menu_text, reply_markup=ReplyKeyboardRemove())
+        else:
+            await update.message.reply_text(f"No menu available for {day}.", reply_markup=ReplyKeyboardRemove())
+    except Exception as e:
+        logger.error(f"Error fetching menu for {day} from DB: {e}")
+        await update.message.reply_text("Could not fetch menu for the selected day.", reply_markup=ReplyKeyboardRemove())
+    finally:
+        cur.close()
+        conn.close()
+    return ConversationHandler.END
 
 # Initialize FastAPI app and Telegram bot
 fastapi_app = FastAPI()
@@ -548,6 +590,26 @@ def add_handlers(app: Application) -> None:
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     app.add_handler(meal_choice_conv_handler)
+
+    # View menu
+    menu_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("menu", menu_command_start)],
+        states={
+            MENU_CHOICE_DAY: [MessageHandler(filters.TEXT & ~filters.COMMAND, fetch_and_display_menu)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    app.add_handler(menu_conv_handler)
+
+    # View menu
+    menu_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("menu", menu_command_start)],
+        states={
+            MENU_CHOICE_DAY: [MessageHandler(filters.TEXT & ~filters.COMMAND, fetch_and_display_menu)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+    app.add_handler(menu_conv_handler)
 
     # Ticket
     app.add_handler(CommandHandler("ticket", ticket))
